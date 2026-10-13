@@ -17,3 +17,5 @@ config/homepage/custom.js
 config/homepage/kubernetes.yaml
 .codex
 /.desloppify/
+.secrets.conf
+*.kdbx

@@ -79,3 +79,20 @@ list_backends() {
         basename "$file" .sh
     done
 }
+
+# The chosen backend and database are remembered here (gitignored)
+CONFIG_FILE="$ROOT_DIR/.secrets.conf"
+
+# Sets SECRETS_BACKEND and SECRETS_DB from the config file, if it exists
+load_config() {
+    SECRETS_BACKEND=""
+    SECRETS_DB=""
+    if [[ -f "$CONFIG_FILE" ]]; then
+        # shellcheck source=/dev/null
+        source "$CONFIG_FILE"
+    fi
+}
+
+save_config() {
+    printf 'SECRETS_BACKEND=%q\nSECRETS_DB=%q\n' "$SECRETS_BACKEND" "$SECRETS_DB" > "$CONFIG_FILE"
+}
