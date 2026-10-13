@@ -64,6 +64,9 @@ $ ./setup-dev.sh
 
 Fill the values you actually need, then start the full stack or the profiles you want.
 
+!!! tip
+    To keep real secrets out of `.env`, store them in KeePassXC, GNOME Keyring / KDE Wallet, or 1Password with `./setup_homelab.sh`, then start the stack with `./secrets.sh compose --profile dev up --wait`. See [Secrets](docs/secrets.md).
+
 ```bash title="Start the full stack"
 # 2. Add the required values to .env
 $ cat >> .env <<'EOF'
