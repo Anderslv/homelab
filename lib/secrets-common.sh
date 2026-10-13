@@ -51,3 +51,31 @@ compose_secrets() {
         | "\($service) \(.name) \(if .required then "required" else "optional" end)"
     ' "$@"
 }
+
+# Asks a yes/no question; returns 0 for yes
+ask() {
+    local answer
+    read -rp "$1 [y/N] " answer
+    [[ "$answer" =~ ^[Yy] ]]
+}
+
+# Loads lib/backends/<name>.sh. Every backend defines the same interface:
+#   BACKEND_DB_LABEL     what the "database" is (empty when the backend has none)
+#   BACKEND_DB_DEFAULT   default database, shown when prompting
+#   backend_open DB      check tools, unlock DB, return non-zero if unusable
+#   backend_has NAME     return 0 if secret NAME exists
+#   backend_get NAME     print the value of secret NAME
+#   backend_set NAME V   store secret NAME with value V
+load_backend() {
+    local file="$ROOT_DIR/lib/backends/$1.sh"
+    [[ -f "$file" ]] || die "Unknown backend '$1'. Available: $(list_backends | tr '\n' ' ')"
+    # shellcheck source=/dev/null
+    source "$file"
+}
+
+list_backends() {
+    local file
+    for file in "$ROOT_DIR"/lib/backends/*.sh; do
+        basename "$file" .sh
+    done
+}
