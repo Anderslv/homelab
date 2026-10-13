@@ -9,6 +9,8 @@
             expect
             dependabot-cli
             gitleaks
+            jq
+            libxml2 # xmllint, used by the KeePassXC secrets backend
             mkcert
             nssTools
             openssl
