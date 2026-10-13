@@ -15,9 +15,11 @@ jobs:
         uses: actions/checkout@v4
       - name: Set up Docker
         uses: docker/setup-docker-action@v5
-      - name: Validate setup script syntax
+      - name: Validate setup and secrets script syntax
         run: |
           bash -n setup-dev.sh
+          bash -n setup_homelab.sh
+          bash -n secrets.sh
       - name: Run setup-dev script
         run: |
           bash setup-dev.sh
