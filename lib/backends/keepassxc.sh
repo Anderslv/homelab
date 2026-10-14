@@ -18,7 +18,8 @@ kp() {
 }
 
 # Each keepassxc-cli call re-derives the key (about 1 second with KeePassXC's default
-# settings), so the database is exported once and queried in memory with xmllint
+# settings), so the database is exported once and queried in memory with xmllint.
+# The export holds every entry decrypted, which is why the docs ask for a dedicated database.
 kp_refresh() {
     KP_XML=$(kp export "$KP_DB")
 }
@@ -42,8 +43,10 @@ backend_open() {
         local repeat
         read -rsp "New password for $KP_DB: " KP_PASSWORD && echo >&2
         read -rsp "Repeat password: " repeat && echo >&2
+        [[ -n "$KP_PASSWORD" ]] || { log_warn "The password cannot be empty"; return 1; }
         [[ "$KP_PASSWORD" == "$repeat" ]] || { log_warn "Passwords do not match"; return 1; }
-        printf '%s\n%s\n' "$KP_PASSWORD" "$KP_PASSWORD" | "$KP_CLI" db-create -q -p "$KP_DB" >/dev/null 2>&1
+        printf '%s\n%s\n' "$KP_PASSWORD" "$KP_PASSWORD" | "$KP_CLI" db-create -q -p "$KP_DB" >/dev/null 2>&1 ||
+            { log_warn "Could not create $KP_DB"; return 1; }
         log_info "Created $KP_DB"
     else
         read -rsp "Password for $KP_DB: " KP_PASSWORD && echo >&2
@@ -62,6 +65,7 @@ backend_get() {
 
 backend_set() {
     # keepassxc-cli add -p reads the database password, then the entry password
-    printf '%s\n%s\n' "$KP_PASSWORD" "$2" | "$KP_CLI" add -q -p "$KP_DB" "$1" >/dev/null
+    printf '%s\n%s\n' "$KP_PASSWORD" "$2" | "$KP_CLI" add -q -p "$KP_DB" "$1" >/dev/null ||
+        die "Could not add $1 to $KP_DB"
     kp_refresh
 }

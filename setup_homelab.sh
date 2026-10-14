@@ -116,7 +116,8 @@ prompt_secret() {
     read -rsp "  $name ($kind, $hint): " value || die "No value given for $name"
     echo >&2
     if [[ -z "$value" && "$kind" == required ]]; then
-        value=$(head -c 32 /dev/urandom | base64)
+        # 32 random bytes as 64 hex characters: safe inside URLs and config files
+        value=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
     fi
     backend_set "$name" "$value"
 }
