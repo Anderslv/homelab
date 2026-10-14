@@ -36,9 +36,9 @@ Password for /Users/you/homelab.kdbx:
 [+] Running ...
 ```
 
-Enter generates a random value for **required** secrets. For **optional** secrets, Enter stores an empty value, so you are not asked again. Change a value later in your password manager.
+Enter generates a random value (64 hex characters, safe inside URLs) for **required** secrets. For **optional** secrets, Enter stores an empty value, so you are not asked again. Change a value later in your password manager.
 
-The script saves your backend and database in `.secrets.conf` (gitignored), so later runs need no flags.
+The script saves your backend and database in `.secrets.conf` (gitignored, readable only by you), so later runs need no flags. The file holds the database location, never a password.
 
 ---
 
@@ -51,6 +51,9 @@ The script saves your backend and database in `.secrets.conf` (gitignored), so l
 | **1Password** | `1password` | vault (default `homelab`) | `op://homelab/<VAR>/password` |
 
 Without `--backend` and without a saved choice, the script shows a menu. Without a database argument and without a saved, working database, it asks for one and retries until the database opens. A wrong password or a missing vault sends you back to the prompt.
+
+!!! warning "Use a dedicated KeePassXC database"
+    The KeePassXC backend unlocks the database once and keeps a decrypted copy of **all** its entries in memory while the script runs. Point it at a database that holds only homelab secrets, such as `~/homelab.kdbx`, never your personal vault. The copy is never written to disk.
 
 Required tools:
 
@@ -91,15 +94,27 @@ A variable counts as a **secret** when either is true:
 - compose requires it: `${VAR:?message}`
 - its name matches `SECRET_NAME_PATTERN` (`PASS|SECRET|TOKEN|KEY|PIN`)
 
-Add a new service with `${MY_APP_PASSWORD:?...}` and the next `./setup_homelab.sh` asks for it. No list needs updating.
+The result is written to **`secrets.inventory`**, a committed list of one `SERVICE VARIABLE KIND` line per secret. It holds variable names only, never values. You never edit it by hand:
 
-`secrets.sh` loads **all** secrets, not only those of the services you start, because compose interpolates every included service. A missing secret is reported before compose's own error:
+- `./update_secrets_inventory.sh` regenerates it and lists added and removed secrets.
+- `./setup_homelab.sh` runs it first, and the pre-commit hook runs it when a compose file changes.
+- CI runs `./update_secrets_inventory.sh --check` and fails when the file is out of date.
+
+Add a new service with `${MY_APP_PASSWORD:?...}` and the next `./setup_homelab.sh` asks for it.
+
+`secrets.sh` reads the inventory, so it does not need to parse the compose files. It loads **all** secrets, not only those of the services you start, because compose interpolates every included service. A missing secret is reported before compose's own error:
 
 ```bash title="A secret that is not stored yet"
 $ ./secrets.sh compose --profile dev up -d
 [WARN] Not in your keepassxc store: RUSTFS_SECRET_KEY (run ./setup_homelab.sh)
 error while interpolating services.rustfs.environment.[]: required variable RUSTFS_SECRET_KEY is missing a value
 ```
+
+### What `secrets.sh` Protects, And What It Does Not
+
+- Secrets are never written to disk. They live in the environment of `docker compose`, which passes them to the containers.
+- `secrets.sh run CMD` gives **every** secret to `CMD` and anything it starts. Only run commands you trust.
+- Values in a container's environment are visible to anyone who can run `docker inspect` on the host. Compose secrets (below) avoid that.
 
 ---
 
