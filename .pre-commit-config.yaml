@@ -29,3 +29,11 @@ repos:
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
+  - repo: local
+    hooks:
+      - id: secrets-inventory
+        name: Update secrets.inventory from the compose files
+        entry: ./update_secrets_inventory.sh
+        language: system
+        files: ^(docker-compose\.yml|services/.*\.yml)$
+        pass_filenames: false
