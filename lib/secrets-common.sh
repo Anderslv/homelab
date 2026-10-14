@@ -84,7 +84,8 @@ ask() {
 #   backend_set NAME V   store secret NAME with value V
 load_backend() {
     local file="$ROOT_DIR/lib/backends/$1.sh"
-    [[ -f "$file" ]] || die "Unknown backend '$1'. Available: $(list_backends | tr '\n' ' ')"
+    # The name must be a plain word, so "../something" cannot load a file outside lib/backends
+    [[ "$1" =~ ^[a-z0-9-]+$ && -f "$file" ]] || die "Unknown backend '$1'. Available: $(list_backends | tr '\n' ' ')"
     # shellcheck source=/dev/null
     source "$file"
 }
@@ -99,16 +100,26 @@ list_backends() {
 # The chosen backend and database are remembered here (gitignored)
 CONFIG_FILE="$ROOT_DIR/.secrets.conf"
 
-# Sets SECRETS_BACKEND and SECRETS_DB from the config file, if it exists
+# Sets SECRETS_BACKEND and SECRETS_DB from the config file, if it exists.
+# The file is read as KEY=VALUE lines, not sourced, so it can never run code.
 load_config() {
     SECRETS_BACKEND=""
     SECRETS_DB=""
-    if [[ -f "$CONFIG_FILE" ]]; then
-        # shellcheck source=/dev/null
-        source "$CONFIG_FILE"
-    fi
+    [[ -f "$CONFIG_FILE" ]] || return 0
+    local key value
+    while IFS='=' read -r key value; do
+        case "$key" in
+            SECRETS_BACKEND) SECRETS_BACKEND="$value" ;;
+            SECRETS_DB) SECRETS_DB="$value" ;;
+        esac
+    done < "$CONFIG_FILE"
 }
 
+# Writes the config readable by you only: it names your password database
 save_config() {
-    printf 'SECRETS_BACKEND=%q\nSECRETS_DB=%q\n' "$SECRETS_BACKEND" "$SECRETS_DB" > "$CONFIG_FILE"
+    (
+        umask 077
+        printf 'SECRETS_BACKEND=%s\nSECRETS_DB=%s\n' "$SECRETS_BACKEND" "$SECRETS_DB" > "$CONFIG_FILE"
+    )
+    chmod 600 "$CONFIG_FILE"
 }
