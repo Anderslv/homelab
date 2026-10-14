@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Interactive secrets setup: pick where secrets live (KeePassXC, GNOME/KDE keyring,
 # or 1Password), then ask for every secret the enabled compose services still miss.
+# The secrets come from secrets.inventory, which this script refreshes first.
 
 # shellcheck source=lib/secrets-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib/secrets-common.sh"
@@ -123,7 +124,7 @@ prompt_secret() {
 # Step 4: for each service with missing secrets, offer to add them
 check_services() {
     local secrets service svc name kind missing entry
-    secrets=$(compose_secrets "${services[@]}")
+    secrets=$(inventory_secrets "${services[@]}")
     [[ -n "$secrets" ]] || { log_info "The selected services use no secrets"; return; }
 
     for service in $(cut -d' ' -f1 <<< "$secrets" | uniq); do
@@ -149,7 +150,8 @@ check_services() {
     done
 }
 
-select_services # first, so a typo fails before any password prompt
+"$ROOT_DIR/update_secrets_inventory.sh" # pick up secrets from newly added services
+select_services # before any password prompt, so a typo fails fast
 choose_backend
 open_store
 save_config

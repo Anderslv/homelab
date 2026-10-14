@@ -21,7 +21,7 @@ Examples:
 EOF
 }
 
-# Exports every secret the compose project uses. Compose interpolates all included
+# Exports every secret in secrets.inventory. Compose interpolates all included
 # services, even those you do not start, so all of them must be present.
 load_secrets() {
     load_config
@@ -29,8 +29,8 @@ load_secrets() {
     load_backend "$SECRETS_BACKEND"
     backend_open "$SECRETS_DB" || die "Could not open the $SECRETS_BACKEND store"
 
-    local services name value missing=()
-    mapfile -t services < <(compose_services all)
+    local name value missing=()
+    # shellcheck disable=SC2119 # no arguments = every service
     while read -r name; do
         if backend_has "$name" </dev/null; then
             value=$(backend_get "$name" </dev/null)
@@ -38,7 +38,7 @@ load_secrets() {
         else
             missing+=("$name")
         fi
-    done < <(compose_secrets "${services[@]}" | cut -d' ' -f2 | sort -u)
+    done < <(inventory_secrets | cut -d' ' -f2 | sort -u)
 
     if ((${#missing[@]})); then
         log_warn "Not in your $SECRETS_BACKEND store: ${missing[*]} (run ./setup_homelab.sh)"

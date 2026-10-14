@@ -52,6 +52,22 @@ compose_secrets() {
     ' "$@"
 }
 
+# The committed list of secrets, written by ./update_secrets_inventory.sh
+INVENTORY_FILE="$ROOT_DIR/secrets.inventory"
+
+# Prints "<service> <VAR> <required|optional>" from the inventory for the given
+# services, or for every service when none are given. Lines whose VAR is not a
+# plain variable name are skipped, so a hand-edited file cannot inject quotes
+# into the backends' lookups.
+inventory_secrets() {
+    [[ -f "$INVENTORY_FILE" ]] || die "secrets.inventory is missing. Run ./update_secrets_inventory.sh"
+    awk -v wanted="$*" '
+        BEGIN { for (i = split(wanted, list, " "); i > 0; i--) keep[list[i]] }
+        /^#/ || $2 !~ /^[A-Za-z_][A-Za-z0-9_]*$/ { next }
+        wanted == "" || $1 in keep { print $1, $2, $3 }
+    ' "$INVENTORY_FILE"
+}
+
 # Asks a yes/no question; returns 0 for yes
 ask() {
     local answer
