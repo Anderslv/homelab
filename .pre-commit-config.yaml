@@ -37,3 +37,9 @@ repos:
         language: system
         files: ^(docker-compose\.yml|services/.*\.yml)$
         pass_filenames: false
+      - id: env-example
+        name: Check that .env.example matches the compose files
+        entry: scripts/secrets/map.sh --check
+        language: system
+        files: ^(docker-compose(\.pods)?\.yml|services/.*\.yml|home-assistant/docker-compose\.yml|\.env\.example)$
+        pass_filenames: false
