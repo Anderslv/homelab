@@ -1,6 +1,7 @@
 # shellcheck shell=bash
-# Detects how the Docker daemon runs (rootless, rootful, colima, down) and warns
-# when it is rootful. It exists so setup and the macOS check share one answer.
+# Detects how the Docker daemon runs (rootless, rootful, colima, down), warns when it
+# is rootful and spots stacks that already hold data. It exists so setup and the
+# macOS check share one answer.
 
 # Runs `docker info` for the security options, giving up after
 # ${HOMELAB_DOCKER_TIMEOUT:-5} seconds so a hung daemon cannot block the caller.
@@ -63,4 +64,24 @@ warn_if_rootful() {
       ;;
   esac
   return 0
+}
+
+# STACK: prints why the stack may already hold data and returns 0, or returns 1 when
+# it is clean. Reasons: "volume NAME", ".env sets VAR" (one of the stack's secrets),
+# or "docker-down" (live data can't be ruled out). Needs map.sh, values.sh, $REPO.
+live_data_reason() {
+  local volumes volume var value
+  if [ "$(docker_mode)" = down ] || ! volumes=$(docker volume ls -q 2>/dev/null); then
+    echo docker-down
+    return 0
+  fi
+  for volume in $(map_stack_volumes "$1"); do
+    if printf '%s\n' "$volumes" | grep -qxF -- "$volume"; then echo "volume $volume"; return 0; fi
+  done
+  if [ ! -f "$REPO/.env" ]; then return 1; fi
+  for var in $(map_stack_vars "$1"); do
+    if ! printf '%s\n' "$var" | grep -Eiq "$MAP_SENSITIVE"; then continue; fi
+    if value=$(dotenv_value "$REPO/.env" "$var") && [ -n "$value" ]; then echo ".env sets $var"; return 0; fi
+  done
+  return 1
 }
