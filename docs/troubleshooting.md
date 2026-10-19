@@ -4,6 +4,8 @@ Use this page when the current repo shape gets in your way: missing main-stack v
 
 Read [Architecture](architecture.md) first if you do not know which stack you are actually debugging.
 
+On a Mac, also read [macOS With Colima](macos.md) for the problems specific to running Docker in a VM.
+
 ---
 
 ## Try It Now

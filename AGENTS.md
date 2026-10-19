@@ -14,6 +14,7 @@ This repo is a Docker Compose homelab. The main stack is `docker-compose.yml`, w
 - Dockhand deployment flow: `docs/dockhand.md`
 - Queue-driven wake pattern: `docs/queue-driven-sleep.md`
 - Failure playbook: `docs/troubleshooting.md`
+- Running on macOS with Colima: `docs/macos.md`
 
 ## Do not edit or commit
 - `.env`

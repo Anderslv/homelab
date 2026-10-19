@@ -35,6 +35,8 @@ Open `http://localhost:3000`.
 
 If you want the full routed stack, keep going.
 
+On macOS, set up Colima and Bash 5 first: see [docs/macos.md](docs/macos.md).
+
 ---
 
 ## Start The Main Stack
