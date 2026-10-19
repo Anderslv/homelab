@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Interactive secrets setup: pick where secrets live (KeePassXC, GNOME/KDE keyring,
-# or 1Password), then ask for every secret the enabled compose services still miss.
+# Interactive secrets setup: pick where secrets live (KeePassXC), then ask for every
+# secret the enabled compose services still miss.
 # The secrets come from secrets.inventory, which this script refreshes first.
 
 # shellcheck source=lib/secrets-common.sh
@@ -13,7 +13,7 @@ show_usage() {
 Usage: $0 [DATABASE] [--db DATABASE] [--backend NAME] [--profile PROFILE [SERVICE...]]
 
 Options:
-    DATABASE, --db DATABASE  KeePassXC .kdbx file or 1Password vault (default: remembered choice)
+    DATABASE, --db DATABASE  KeePassXC .kdbx file (default: remembered choice)
     --backend NAME           One of: $(list_backends | tr '\n' ' ')
     --profile PROFILE        Only check services in this compose profile ("all" = every
                              service, the default), optionally only the SERVICEs listed

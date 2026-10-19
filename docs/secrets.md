@@ -47,8 +47,6 @@ The script saves your backend and database in `.secrets.conf` (gitignored, reada
 | Backend | `--backend` | "Database" | Where a secret lives |
 | --- | --- | --- | --- |
 | **KeePassXC** | `keepassxc` | `.kdbx` file (default `~/homelab.kdbx`) | Root-group entry titled `<VAR>`, value in **Password** |
-| **GNOME Keyring / KDE Wallet** | `secret-service` | none, uses the default keyring | Item with attributes `service=homelab key=<VAR>` |
-| **1Password** | `1password` | vault (default `homelab`) | `op://homelab/<VAR>/password` |
 
 Without `--backend` and without a saved choice, the script shows a menu. Without a database argument and without a saved, working database, it asks for one and retries until the database opens. A wrong password or a missing vault sends you back to the prompt.
 
@@ -58,9 +56,7 @@ Without `--backend` and without a saved choice, the script shows a menu. Without
 Required tools:
 
 - **KeePassXC**: `keepassxc-cli` (bundled with the app; on macOS the script finds it in `/Applications/KeePassXC.app`) and `xmllint`
-- **Secret Service**: `secret-tool` (package `libsecret-tools` on Debian/Ubuntu, `libsecret` on Fedora/Arch); KWallet needs version 5.97 or newer
-- **1Password**: the `op` CLI, signed in or connected to the desktop app
-- All backends: `docker` and `jq`
+- Everything: `docker` and `jq`
 
 The Nix dev shell provides `jq` and `xmllint`.
 
@@ -164,7 +160,7 @@ Converting is a per-service change you can make gradually. Check that the image 
 
 ## Servers And Dockhand
 
-- **Headless server**: install `keepassxc-cli` and copy the `.kdbx` file there, or use 1Password with a service account (`OP_SERVICE_ACCOUNT_TOKEN`). Run `./setup_homelab.sh` once, then `./secrets.sh compose --profile prod up -d`.
+- **Headless server**: install `keepassxc-cli` and copy the `.kdbx` file there. Run `./setup_homelab.sh` once, then `./secrets.sh compose --profile prod up -d`.
 - **Dockhand**: Dockhand deploys from Git and reads variables from its own UI, not from your password manager. Copy the values there. See [Deployment](dockhand.md).
 
 Related: [Services](services.md) lists which variables each service needs.
