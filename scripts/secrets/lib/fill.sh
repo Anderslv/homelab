@@ -3,8 +3,8 @@
 # the missing ones, most important first. It exists so setup.sh only tells the story: every
 # accepted value lands in PENDING_JSON in memory, and setup writes it to KeePassXC once.
 
-MISSING='' REFUSED='' PENDING_JSON='{}' FILL_ROWS='' FILL_ENV_FILE='' FILL_LINKED='' FILL_LIVE='' FILL_DOWN_SAID=''
-FILL_TAB=$(printf '\t') FILL_US=$(printf '\037')
+MISSING='' REFUSED='' PENDING_JSON='{}' FILL_ROWS='' FILL_ENV_FILE='' FILL_LINKED='' FILL_OPTIONAL='' SKIPPED_OPTIONAL=''
+FILL_US=$(printf '\037')
 
 # JSON VAR VALUE: prints JSON with VAR set to VALUE. The value never becomes an argument:
 # it reaches `jq -Rs .` on stdin, and the second jq reads the map and that string as two inputs.
@@ -31,14 +31,16 @@ fill_linked() {
   fi
   printf '%s' "$FILL_LINKED" | jq -e --arg k "$1" '(.[$k] // "") != ""' >/dev/null || return 1
   note "$1 found in secrets.yaml"
-  ask_yn '  Store it in KeePassXC?' y || return 1
+  # A non-interactive flag is consent: take it rather than generate a value the file contradicts.
+  if fill_interactive && ! ask_yn '  Store it in KeePassXC?' y; then return 1; fi
   PENDING_JSON=$(printf '%s\n%s\n' "$PENDING_JSON" "$FILL_LINKED" | jq -cs --arg k "$1" '.[0] + {($k): .[1][$k]}')
 }
 
-# ROWS CURRENT_JSON: prints ✓/✗/− per variable and sets MISSING, in map order.
+# ROWS CURRENT_JSON: prints ✓/✗/− per variable and sets MISSING, in map order, and
+# FILL_OPTIONAL (the optional ones among them, which [a] and --auto leave alone).
 check_values() {
   local first have var kind default
-  FILL_ROWS=$1 MISSING=''
+  FILL_ROWS=$1 MISSING='' FILL_OPTIONAL=''
   first=" $(first_setup_vars | tr '\n' ' ') "
   have=" $(printf '%s' "$2" | jq -r 'to_entries[] | select(.value != null and .value != "") | .key' | tr '\n' ' ') "
   # Fields split on a unit separator, not a tab, so `read` keeps empty ones; fd 3 leaves
@@ -47,48 +49,26 @@ check_values() {
     if [ -z "$var" ]; then continue; fi
     case "$have" in *" $var "*) ok "$var in KeePassXC"; continue ;; esac
     if fill_linked "$var"; then continue; fi
-    case "$kind$first" in required*|*" $var "*) fail "$var missing"; MISSING="${MISSING:+$MISSING }$var" ;;
-      default*) note "$var uses default $default" ;;
-      *) note "$var is optional and not set" ;;
+    case "$kind$first" in
+      required*|*" $var "*) fail "$var missing" ;;
+      default*) note "$var uses default $default"; continue ;;
+      *) fail "$var missing (optional)"; FILL_OPTIONAL="$FILL_OPTIONAL $var" ;;
     esac
+    MISSING="${MISSING:+$MISSING }$var"
   done 3< <(printf '%s\n' "$1" | tr '\t' "$FILL_US")
-}
-
-# VAR: 0 when VAR's stack (every selected stack for core) holds no data; otherwise
-# prints the spec §3.6 reason and returns 1. Each stack is checked once per run.
-fill_live_ok() {
-  local var=$1 stacks stack line reason=''
-  stacks=$(fill_field "$var" 1)
-  if [ "$stacks" = core ]; then stacks=$SELECTED_STACKS; fi
-  for stack in $stacks; do
-    line=$(printf '%s\n' "$FILL_LIVE" | grep "^$stack$FILL_TAB" || true)
-    if [ -z "$line" ]; then line="$stack$FILL_TAB$(live_data_reason "$stack" || true)" FILL_LIVE="$FILL_LIVE$line"$'\n'; fi
-    reason=${line#*"$FILL_TAB"}
-    if [ -n "$reason" ]; then break; fi
-  done
-  if [ -z "$reason" ]; then return 0; fi
-  if [ "$reason" != docker-down ]; then
-    warn "$stack already has data ($reason)."
-    printf '    A new %s would lock %s out of its database.\n    Import it from .env [e] or type the current value [m].\n' \
-      "$var" "$(printf '%s\n' "$stack" | awk '{ print toupper(substr($0, 1, 1)) substr($0, 2) }')" >&2
-  elif [ -z "$FILL_DOWN_SAID" ]; then
-    FILL_DOWN_SAID=1
-    fail "Docker is not running, so I can't check whether your stacks already hold data."
-    printf '%s\n' '    A new password for a stack that has data would lock its apps out of their databases.' \
-      '    Start Docker and rerun, or import from .env [e] / type the current value [m].' >&2
-  fi
-  return 1
 }
 
 # VAR…: imports these from FILL_ENV_FILE (parsed, never sourced) after listing them;
 # placeholders are ignored. Non-interactive runs (--env) take them without asking.
+# Returns 1 when nothing was taken, 2 when the path was refused (ask for another).
 fill_import() {
   local var value found='{}' n=0
   fill_env_path
-  dotenv_refuse_tracked "$FILL_ENV_FILE"
-  if [ ! -f "$FILL_ENV_FILE" ]; then
-    fill_interactive || die "No file at $FILL_ENV_FILE."
-    fail "No file at $FILL_ENV_FILE."; FILL_ENV_FILE=''; return 1
+  # A tracked or missing file stops a non-interactive run; interactively FILL_ENV_FILE is
+  # cleared so the path is asked again. The subshell keeps dotenv_refuse_tracked's die local.
+  if ! (dotenv_refuse_tracked "$FILL_ENV_FILE") || { [ ! -f "$FILL_ENV_FILE" ] && fail "No file at $FILL_ENV_FILE."; }; then
+    fill_interactive || exit 1
+    FILL_ENV_FILE=''; return 2
   fi
   for var in "$@"; do
     if ! value=$(dotenv_value "$FILL_ENV_FILE" "$var") || [ -z "$value" ]; then continue; fi
@@ -98,7 +78,9 @@ fill_import() {
     printf '    %s=%s\n' "$var" "$value" >&2
   done
   if [ "$n" = 0 ]; then note "No values for these in $FILL_ENV_FILE."; return 1; fi
-  if fill_interactive && ! ask_yn "  Store these $n values?" n; then note 'Nothing imported.'; return 1; fi
+  value="Store these $n values?"
+  if [ "$n" = 1 ]; then value='Store this value?'; fi
+  if fill_interactive && ! ask_yn "  $value" n; then note 'Nothing imported.'; return 1; fi
   PENDING_JSON=$(printf '%s\n%s\n' "$PENDING_JSON" "$found" | jq -cs '.[0] + .[1]')
   ok "Took $n values from $FILL_ENV_FILE"
 }
@@ -126,7 +108,7 @@ fill_enter() {
 # VAR AUTO(yes|no): fills one variable, generating it without asking when AUTO=yes.
 # Returns 2 for "skip all remaining", 3 when live data refused it in a non-interactive run.
 fill_one() {
-  local var=$1 kind sens value keys='e m s S' choice
+  local var=$1 kind sens value keys='e m s S' choice status
   if ! fill_interactive && [ "$2" != yes ]; then return 0; fi
   kind=$(fill_field "$var" 3) sens=$(fill_field "$var" 5)
   if value=$(auto_value "$var" "$kind" "$sens"); then
@@ -143,7 +125,9 @@ fill_one() {
     choice=$(menu "$keys") || exit 1
     case "$choice" in
       a) fill_put "$var" "$value"; ok "$var set automatically"; return 0 ;;
-      e) if fill_import "$var"; then return 0; fi ;;
+      e) status=2
+        while [ "$status" = 2 ]; do status=0; fill_import "$var" || status=$?; done
+        if [ "$status" = 0 ]; then return 0; fi ;;
       m) if fill_enter "$var" "$kind" "$sens"; then return 0; fi ;;
       s) note "$var skipped"; return 0 ;;
       S) return 2 ;;
@@ -154,7 +138,7 @@ fill_one() {
 # MODE (ask|auto|env|skip): fills MISSING into PENDING_JSON and sets REFUSED.
 fill_missing() {
   local mode=$1 var status
-  REFUSED=''
+  REFUSED='' SKIPPED_OPTIONAL=''
   set -- $MISSING
   if [ "$#" = 0 ] || [ "$mode" = skip ]; then return 0; fi
   if [ "$mode" = ask ]; then
@@ -167,11 +151,20 @@ fill_missing() {
   if [ "$mode" = env ]; then fill_import $MISSING || true; fi
   for var in $MISSING; do
     if fill_pending "$var"; then continue; fi
+    if [ "$mode" = auto ] && case "$FILL_OPTIONAL " in *" $var "*) true ;; *) false ;; esac; then
+      SKIPPED_OPTIONAL="${SKIPPED_OPTIONAL:+$SKIPPED_OPTIONAL }$var"; continue
+    fi
     status=0
     if [ "$mode" = auto ]; then fill_one "$var" yes || status=$?; else fill_one "$var" no || status=$?; fi
     case "$status" in 2) note 'Skipped the rest.'; break ;; 3) REFUSED="${REFUSED:+$REFUSED }$var" ;; esac
   done
 }
 
-# Prints the MISSING names that Fill left without a value.
-fill_still_missing() { local var; for var in $MISSING; do fill_pending "$var" || printf '%s ' "$var"; done; }
+# Prints the MISSING names that Fill left without a value, except SKIPPED_OPTIONAL.
+fill_still_missing() {
+  local var
+  for var in $MISSING; do
+    case " $SKIPPED_OPTIONAL " in *" $var "*) continue ;; esac
+    fill_pending "$var" || printf '%s ' "$var"
+  done
+}
