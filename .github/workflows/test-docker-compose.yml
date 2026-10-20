@@ -6,15 +6,40 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:  # Allow manual triggering
+env:
+  # The release binaries below, pinned by version and sha256 (checked when pinned
+  # against each project's release assets; sops also publishes a checksums file).
+  SOPS_VERSION: v3.10.1
+  SOPS_SHA256: 1bc9fbce48e3fcc7e684d604d50f7c56721b6cd2d27f96ec74b8b56b5a96c942
+  AGE_VERSION: v1.2.1
+  AGE_SHA256: 7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50
 jobs:
   validate-config:
     name: Validate Compose and Images
     runs-on: ubuntu-latest
+    env:
+      # Every secrets path lives in the throwaway runner temp folder, never in HOME.
+      HOMELAB_SECRETS_DIR: ${{ runner.temp }}/homelab-secrets
+      HOMELAB_SECRETS_AGE_KEY_FILE: ${{ runner.temp }}/age/keys.txt
+      HOMELAB_SECRETS_BACKUP_DIR: ${{ runner.temp }}/homelab-secrets-backups
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Set up Docker
         uses: docker/setup-docker-action@v5
+      - name: Install keepassxc-cli, sops and age
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q keepassxc
+          cd "$RUNNER_TEMP" || exit 1
+          curl -fsSLo sops "https://github.com/getsops/sops/releases/download/$SOPS_VERSION/sops-$SOPS_VERSION.linux.amd64"
+          curl -fsSLo age.tar.gz "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-linux-amd64.tar.gz"
+          printf '%s  sops\n%s  age.tar.gz\n' "$SOPS_SHA256" "$AGE_SHA256" | sha256sum -c -
+          tar -xzf age.tar.gz age/age age/age-keygen
+          sudo install -m 755 sops age/age age/age-keygen /usr/local/bin/
+          keepassxc-cli --version
+          sops --version
+          age --version
       - name: Validate setup and secrets script syntax
         run: |
           bash -n setup-dev.sh
@@ -22,41 +47,65 @@ jobs:
           bash -n scripts/secrets/setup.sh
           bash -n scripts/secrets/map.sh
           for f in scripts/secrets/lib/*.sh; do bash -n "$f"; done
+      - name: Run the secrets tests
+        run: |
+          bash dev/tests/secrets-setup.test.sh
       - name: Check that .env.example matches the compose files
         run: |
           scripts/secrets/map.sh --check
-      - name: Run setup-dev script
+      - name: Set up a throwaway vault and the secrets output
         run: |
-          bash setup-dev.sh
+          # Dummy values for what --auto cannot generate. No "ci-" prefix: setup.sh
+          # treats those as placeholders and never imports them.
+          (umask 077 && printf '%s\n' \
+            OPENVPN_USER=dummy-openvpn-user \
+            OPENVPN_PASSWORD=dummy-openvpn-password \
+            PAPERLESS_ADMIN_PASSWORD=dummy-paperless-password \
+            DOMAIN=localhost.me \
+            TZ=UTC \
+            GLUETUN_HEALTHCHECK_DISABLED=true > "$RUNNER_TEMP/ci.env")
+          # A random vault password, kept in this shell and piped on stdin only.
+          pw=$(openssl rand -hex 24)
+          printf '%s\n%s\n' "$pw" "$pw" |
+            keepassxc-cli db-create -q -p -t 100 "$RUNNER_TEMP/ci.kdbx" >/dev/null
+          # Import ci.env first, then generate whatever is still missing.
+          printf '%s\n' "$pw" |
+            scripts/secrets/setup.sh --profile dev --env "$RUNNER_TEMP/ci.env" --auto --env-name ci "$RUNNER_TEMP/ci.kdbx"
+      # secrets.sh uses the local compose.yml setup.sh wrote; --profile dev selected
+      # every stack, so it includes the same files as docker-compose.yml (prod too).
       - name: Validate main Docker Compose configuration (profile dev)
         run: |
-          DOMAIN=localhost.me docker compose --profile dev config
+          ./secrets.sh compose --profile dev config -q
       - name: Validate production HTTPS Traefik configuration
         run: |
-          DOMAIN=lab.example.test ACME_EMAIL=ci@example.test CF_DNS_API_TOKEN=ci-dummy-cloudflare-token docker compose --profile prod config
+          # Values set in the shell win over the stored ones.
+          DOMAIN=lab.example.test ACME_EMAIL=ci@example.test CF_DNS_API_TOKEN=ci-dummy-cloudflare-token ./secrets.sh compose --profile prod config -q
       - name: Verify production HTTPS requires ACME secrets
         run: |-
-          grep -Ev '^(ACME_EMAIL|CF_DNS_API_TOKEN)=' .env > /tmp/prod-missing.env
+          # Without secrets.sh: every .env.example variable gets its documented
+          # default (or "dummy"), except the two ACME ones the check must miss.
+          awk '/^# \(default /{d=$3} /^[A-Za-z_][A-Za-z0-9_]*=$/{print $0 (d != "" ? d : "dummy"); d=""}' .env.example |
+            grep -Ev '^(ACME_EMAIL|CF_DNS_API_TOKEN)=' > "$RUNNER_TEMP/prod-missing.env"
           set +e
-          env -u CF_DNS_API_TOKEN -u ACME_EMAIL DOMAIN=lab.example.test COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file /tmp/prod-missing.env --profile prod run --rm --no-deps prod-check >/tmp/prod-missing.out 2>&1
+          env -u CF_DNS_API_TOKEN -u ACME_EMAIL DOMAIN=lab.example.test docker compose --env-file "$RUNNER_TEMP/prod-missing.env" --profile prod run --rm --no-deps prod-check >"$RUNNER_TEMP/prod-missing.out" 2>&1
           status=$?
           set -e
           if test "$status" -eq 0; then
             echo "Expected production profile check to fail without ACME secrets"
             exit 1
           fi
-          grep -Eq 'CF_DNS_API_TOKEN|ACME_EMAIL' /tmp/prod-missing.out || {
-            cat /tmp/prod-missing.out
+          grep -Eq 'CF_DNS_API_TOKEN|ACME_EMAIL' "$RUNNER_TEMP/prod-missing.out" || {
+            cat "$RUNNER_TEMP/prod-missing.out"
             exit 1
           }
       - name: Validate pods bootstrap Docker Compose configuration
         run: |
-          DOMAIN=localhost.me docker compose -f docker-compose.pods.yml config
+          ./secrets.sh compose -f docker-compose.pods.yml config -q
       - name: Validate referenced images exist for main stack (dry run)
         run: |-
           set -euo pipefail
-          DOMAIN=localhost.me docker compose --profile dev pull --dry-run
+          ./secrets.sh compose --profile dev pull --dry-run
       - name: Validate referenced images exist for pods stack (dry run)
         run: |-
           set -euo pipefail
-          DOMAIN=localhost.me docker compose -f docker-compose.pods.yml pull --dry-run
+          ./secrets.sh compose -f docker-compose.pods.yml pull --dry-run
