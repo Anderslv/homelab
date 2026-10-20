@@ -27,10 +27,10 @@ case_guard_no_recursive_delete() {
 
 case_guard_no_herestrings() {
   local hits
-  # Ruling 1: secrets.sh joins this scan when Task 11 rewrites it.
-  hits=$( { grep -rn '<<<' "$CHECKOUT/scripts/secrets" || true
-            grep -rn '<<' "$CHECKOUT/scripts/secrets" | grep -v "<<'USAGE'" || true; } )
-  expect_true "no here-string or heredoc (except <<'USAGE') in scripts/secrets/" [ -z "$hits" ]
+  # Ruling 1: secrets.sh joined this scan when Task 11 rewrote it.
+  hits=$( { grep -rn '<<<' "$CHECKOUT/scripts/secrets" "$CHECKOUT/secrets.sh" || true
+            grep -rn '<<' "$CHECKOUT/scripts/secrets" "$CHECKOUT/secrets.sh" | grep -v "<<'USAGE'" || true; } )
+  expect_true "no here-string or heredoc (except <<'USAGE') in scripts/secrets/ or secrets.sh" [ -z "$hits" ]
   if [ -n "$hits" ]; then printf '%s\n' "$hits"; fi
 }
 
