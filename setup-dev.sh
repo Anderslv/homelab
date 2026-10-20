@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Setup script for homelab development environment
-# Copies .env.example when needed, generates dev-safe app keys, and reports missing required values
+# Creates the local TLS certificate and checks env_file references; values are handled by scripts/secrets/setup.sh
 
 # Color codes for output
 RED='\033[0;31m'
@@ -79,123 +79,11 @@ collect_required_env_refs() {
     fi
 }
 
-has_config_value() {
-    local var_name="$1"
-
-    if [[ -n "${!var_name-}" ]]; then
-        return 0
-    fi
-
-    [[ -f ".env" ]] && grep -Eq "^${var_name}=.+" ".env"
-}
-
-generate_base64_key() {
-    if command -v openssl >/dev/null 2>&1; then
-        openssl rand -base64 32 | tr -d '\n'
-        return 0
-    fi
-
-    head -c 32 /dev/urandom | base64 | tr -d '\n'
-}
-
-set_env_value() {
-    local var_name="$1"
-    local var_value="$2"
-    local env_file="$3"
-    local tmp_file
-
-    tmp_file=$(mktemp)
-
-    if [[ -f "$env_file" ]]; then
-        grep -Ev "^${var_name}=" "$env_file" > "$tmp_file" || true
-    fi
-
-    printf '%s=%s\n' "$var_name" "$var_value" >> "$tmp_file"
-    mv "$tmp_file" "$env_file"
-}
-
-ensure_generated_dev_key() {
-    local var_name="$1"
-
-    if has_config_value "$var_name"; then
-        return 0
-    fi
-
-    if [[ ! -f ".env" ]]; then
-        log_warn ".env is missing, so $var_name was not generated"
-        return 1
-    fi
-
-    set_env_value "$var_name" "$(generate_base64_key)" ".env"
-    log_info "Generated development key: $var_name"
-}
-
-ensure_speedtest_app_key() {
-    local existing_value
-
-    if [[ -f ".env" ]] && grep -Eq "^SPEEDTEST_APP_KEY=.+" ".env"; then
-        existing_value=$(grep -E "^SPEEDTEST_APP_KEY=" ".env" | tail -n 1)
-        existing_value=${existing_value#SPEEDTEST_APP_KEY=}
-
-        if [[ "$existing_value" == base64:* ]]; then
-            set_env_value SPEEDTEST_APP_KEY "${existing_value#base64:}" ".env"
-            log_info "Normalized development key format: SPEEDTEST_APP_KEY"
-        fi
-
-        return 0
-    fi
-
-    if [[ -n "${SPEEDTEST_APP_KEY-}" ]]; then
-        return 0
-    fi
-
-    if [[ ! -f ".env" ]]; then
-        log_warn ".env is missing, so SPEEDTEST_APP_KEY was not generated"
-        return 1
-    fi
-
-    set_env_value SPEEDTEST_APP_KEY "$(generate_base64_key)" ".env"
-    log_info "Generated development key: SPEEDTEST_APP_KEY"
-}
-
-ensure_ci_placeholder() {
-    local var_name="$1"
-    local var_value="$2"
-    local ci_value="${CI-}"
-
-    case "${ci_value,,}" in
-        1|true|yes|on) ;;
-        *) return 0 ;;
+is_ci() {
+    case "${CI-}" in
+        1|true|TRUE|True|yes|YES|Yes|on|ON|On) return 0 ;;
+        *) return 1 ;;
     esac
-
-    if has_config_value "$var_name"; then
-        return 0
-    fi
-
-    if [[ ! -f ".env" ]]; then
-        log_warn ".env is missing, so $var_name was not set for CI validation"
-        return 1
-    fi
-
-    set_env_value "$var_name" "$var_value" ".env"
-    log_info "Set CI placeholder: $var_name"
-}
-
-ensure_dev_placeholder() {
-    local var_name="$1"
-    local var_value="$2"
-
-    if has_config_value "$var_name"; then
-        return 0
-    fi
-
-    if [[ ! -f ".env" ]]; then
-        log_warn ".env is missing, so $var_name was not set for local validation"
-        return 1
-    fi
-
-    set_env_value "$var_name" "$var_value" ".env"
-    log_info "Set development placeholder: $var_name"
 }
 
 ensure_local_tls_artifacts() {
@@ -203,7 +91,6 @@ ensure_local_tls_artifacts() {
     local dyn_file="config/traefik/dyn/local-certs.generated.yml"
     local cert_file="$cert_dir/localhost.me.pem"
     local key_file="$cert_dir/localhost.me-key.pem"
-    local ci_value="${CI-}"
 
     mkdir -p "$cert_dir" "config/traefik/dyn"
 
@@ -211,7 +98,7 @@ ensure_local_tls_artifacts() {
         if command -v mkcert >/dev/null 2>&1; then
             log_info "Generating local TLS certificate with mkcert for localhost.me"
             mkcert -cert-file "$cert_file" -key-file "$key_file" localhost.me "*.localhost.me"
-        elif [[ "${ci_value,,}" =~ ^(1|true|yes|on)$ ]] && command -v openssl >/dev/null 2>&1; then
+        elif is_ci && command -v openssl >/dev/null 2>&1; then
             log_warn "mkcert is unavailable in CI; generating a temporary self-signed certificate for compose validation"
             openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
                 -keyout "$key_file" \
@@ -237,14 +124,6 @@ EOF
     log_info "Local Traefik TLS certificate configured: $cert_file"
 }
 
-show_generation_hints() {
-    log_info "Generator hints:"
-    if command -v mkpasswd >/dev/null 2>&1; then
-        log_info "  mkpasswd -l 32 -s 1      # passwords"
-    fi
-    log_info "  openssl rand -base64 32   # app keys and secrets"
-}
-
 show_usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
@@ -255,13 +134,9 @@ Options:
     --help, -h    Show this help message
 
 This script:
-- Optionally copies .env.example to .env if missing
 - Creates mkcert-backed local TLS files for https://*.localhost.me
-- Generates random app keys in .env when safe for local development
-- Sets local dummy OpenVPN and DumbAssets values when missing so compose config can render
 - Verifies required env_file references from included compose files
-- Reports required secrets that must be set manually
-- Leaves optional service env overrides optional
+- Never creates, writes or reads .env; store values with scripts/secrets/setup.sh
 
 Run this script before starting the homelab and pods stacks with docker compose.
 EOF
@@ -283,7 +158,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 log_info "Setting up the homelab development environment..."
-log_info "setup-dev.sh generates local TLS files and app keys, sets local OpenVPN and DumbAssets placeholders, and leaves optional service env overrides optional"
+log_info "setup-dev.sh generates local TLS files and checks env_file references; it does not touch .env"
 
 ENV_FILES_DIR="services"
 
@@ -304,97 +179,13 @@ if (( ${#missing_env_files[@]} > 0 )); then
     printf ' - %s\n' "${missing_env_files[@]}"
 fi
 
-# Optional: Create .env from .env.example if missing
-if [[ ! -f ".env" && -f ".env.example" ]]; then
-    log_warn "Copying .env.example to .env"
-    cp .env.example .env
-elif [[ ! -f ".env" ]]; then
-    log_info "No .env file found. You can create one for custom environment variables."
-fi
-
-ci_placeholder_failures=0
-ensure_ci_placeholder PAPERLESS_ADMIN_PASSWORD ci-paperless-admin-password || ci_placeholder_failures=1
-
-if (( ci_placeholder_failures > 0 )); then
-    log_error "Failed to set one or more CI placeholders"
+if ! ensure_local_tls_artifacts; then
+    log_error "Failed to set up the local TLS certificate"
     exit 1
-fi
-
-dev_placeholder_failures=0
-ensure_local_tls_artifacts || dev_placeholder_failures=1
-ensure_dev_placeholder OPENVPN_USER local-openvpn-user || dev_placeholder_failures=1
-ensure_dev_placeholder OPENVPN_PASSWORD local-openvpn-password || dev_placeholder_failures=1
-ensure_dev_placeholder DUMBASSETS_PIN 1234 || dev_placeholder_failures=1
-
-if (( dev_placeholder_failures > 0 )); then
-    log_error "Failed to set one or more development placeholders"
-    exit 1
-fi
-
-generated_key_failures=0
-for generated_key in PAPERLESS_DBPASS IMMICH_DB_PASSWORD LISTMONK_db__password PAPERLESS_SECRET_KEY NEXTAUTH_SECRET MEILI_MASTER_KEY DUMBASSETS_SESSION_SECRET HERMES_DASHBOARD_BASIC_AUTH_PASSWORD HERMES_DASHBOARD_BASIC_AUTH_SECRET; do
-    if ! ensure_generated_dev_key "$generated_key"; then
-        generated_key_failures=1
-    fi
-done
-if ! ensure_speedtest_app_key; then
-    generated_key_failures=1
-fi
-
-required_vars=(
-    IMMICH_DB_PASSWORD
-    LISTMONK_db__password
-    PAPERLESS_DBPASS
-    PAPERLESS_ADMIN_PASSWORD
-    PAPERLESS_SECRET_KEY
-    NEXTAUTH_SECRET
-    MEILI_MASTER_KEY
-    RUSTFS_ACCESS_KEY
-    RUSTFS_SECRET_KEY
-    OPENVPN_USER
-    OPENVPN_PASSWORD
-    SPEEDTEST_APP_KEY
-    DUMBASSETS_PIN
-    DUMBASSETS_SESSION_SECRET
-    HERMES_DASHBOARD_BASIC_AUTH_PASSWORD
-    HERMES_DASHBOARD_BASIC_AUTH_SECRET
-)
-
-missing_required_vars=()
-for required_var in "${required_vars[@]}"; do
-    if ! has_config_value "$required_var"; then
-        missing_required_vars+=("$required_var")
-    fi
-done
-
-if (( ${#missing_required_vars[@]} > 0 )); then
-    log_warn "Missing required variables for docker compose --profile dev:"
-    printf ' - %s\n' "${missing_required_vars[@]}"
-    log_warn "Set them in .env, direnv, or Dockhand before starting the stack"
-    show_generation_hints
-elif (( generated_key_failures > 0 )); then
-    log_warn "Some development keys were not generated automatically"
-    show_generation_hints
 fi
 
 log_info "Setup complete!"
 log_info ""
-log_info "Next steps:"
-log_info "1. Start the main homelab stack (infra + apps):"
-log_info "   docker compose --profile dev up --wait"
-log_info "2. Start the separate Dockhand bootstrap stack:"
-log_info "   docker compose -f docker-compose.pods.yml up -d"
-log_info "3. Start only infrastructure:"
-log_info "   docker compose --profile infra up -d"
-log_info "4. Start only applications (requires infra running):"
-log_info "   docker compose --profile apps up -d"
-log_info "5. Start Home Assistant:"
-log_info "   docker compose --profile service up -d ha"
-log_info "6. Start the production ACME stack after setting DOMAIN, ACME_EMAIL, and CF_DNS_API_TOKEN:"
-log_info "   docker compose --profile prod up -d"
-log_info "7. Set required secrets in .env, direnv, or Dockhand before docker compose up"
-log_info ""
-log_info "View main stack status: docker compose ps"
-log_info "View pods stack status: docker compose -f docker-compose.pods.yml ps"
-log_info "Stop main stack: docker compose down"
-log_info "Stop pods stack: docker compose -f docker-compose.pods.yml down"
+log_info "Start the pods stack: docker compose -f docker-compose.pods.yml up -d"
+log_info "Stop the main stack: ./secrets.sh compose down"
+log_info "Next: store your values with scripts/secrets/setup.sh, then run ./secrets.sh compose --profile dev up --wait"

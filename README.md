@@ -41,26 +41,20 @@ On macOS, set up Colima and Bash 5 first: see [docs/macos.md](docs/macos.md).
 
 ## Start The Main Stack
 
-`setup-dev.sh` is the local source of truth for required variables and generated development keys.
+`setup-dev.sh` creates the local TLS certificate and checks the `env_file` references. It never creates, writes or reads `.env`; values are stored with `scripts/secrets/setup.sh`.
 
-```bash title="Prepare local env and inspect missing values"
-# 1. Prepare .env from .env.example when needed
+```bash title="Prepare local TLS files"
 $ ./setup-dev.sh
 [INFO] Setting up the homelab development environment...
-[INFO] setup-dev.sh generates local TLS files and app keys, sets local OpenVPN and DumbAssets placeholders, and leaves optional service env overrides optional
-[INFO] Set development placeholder: OPENVPN_USER
-[INFO] Set development placeholder: OPENVPN_PASSWORD
-[INFO] Set development placeholder: DUMBASSETS_PIN
-[INFO] Generated development key: NEXTAUTH_SECRET
-[INFO] Generated development key: MEILI_MASTER_KEY
-[INFO] Generated development key: DUMBASSETS_SESSION_SECRET
-[WARN] Missing required variables for docker compose --profile dev:
- - PAPERLESS_ADMIN_PASSWORD
- ...
+[INFO] setup-dev.sh generates local TLS files and checks env_file references; it does not touch .env
+[INFO] Generating local TLS certificate with mkcert for localhost.me
+[INFO] Local Traefik TLS certificate configured: config/traefik/certs/localhost.me.pem
 [INFO] Setup complete!
+[INFO]
+[INFO] Start the pods stack: docker compose -f docker-compose.pods.yml up -d
+[INFO] Stop the main stack: ./secrets.sh compose down
+[INFO] Next: store your values with scripts/secrets/setup.sh, then run ./secrets.sh compose --profile dev up --wait
 ```
-
-`setup-dev.sh` writes dummy OpenVPN and DumbAssets PIN values so the local full stack can render. Replace the OpenVPN values and set `GLUETUN_HEALTHCHECK_DISABLED=false` before running the VPN-backed media automation for real. `DUMBASSETS_SESSION_SECRET` is generated with the other app keys.
 
 Fill the values you actually need, then start the full stack or the profiles you want.
 
@@ -260,7 +254,7 @@ For production ACME certificates, start the stack with the production profile:
 
 `prowlarr` and `bazarr` route directly on `traefik_public`.
 
-The active compose config requires `OPENVPN_USER` and `OPENVPN_PASSWORD` for Gluetun. `setup-dev.sh` supplies local dummy values so config rendering works, but real media downloads need real VPN credentials.
+The active compose config requires `OPENVPN_USER` and `OPENVPN_PASSWORD` for Gluetun. Store real VPN credentials with `scripts/secrets/setup.sh` before running the VPN-backed media automation.
 
 ### 3. There are parked service definitions
 
