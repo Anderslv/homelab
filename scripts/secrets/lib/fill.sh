@@ -59,7 +59,8 @@ check_values() {
 }
 
 # VAR…: imports these from FILL_ENV_FILE (parsed, never sourced) after listing them;
-# placeholders are ignored. Non-interactive runs (--env) take them without asking.
+# placeholders are ignored. Non-interactive runs (--env, or --env with --auto, which then
+# generates what is still missing) take them without asking.
 # Returns 1 when nothing was taken, 2 when the path was refused (ask for another).
 fill_import() {
   local var value found='{}' n=0

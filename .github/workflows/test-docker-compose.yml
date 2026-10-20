@@ -17,6 +17,10 @@ jobs:
   validate-config:
     name: Validate Compose and Images
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        # GitHub then runs each block with bash --noprofile --norc -eo pipefail {0}.
+        shell: bash
     env:
       # Every secrets path lives in the throwaway runner temp folder, never in HOME.
       HOMELAB_SECRETS_DIR: ${{ runner.temp }}/homelab-secrets
@@ -29,6 +33,7 @@ jobs:
         uses: docker/setup-docker-action@v5
       - name: Install keepassxc-cli, sops and age
         run: |
+          set -u
           sudo apt-get update -q
           sudo apt-get install -y -q keepassxc
           cd "$RUNNER_TEMP" || exit 1
@@ -55,6 +60,7 @@ jobs:
           scripts/secrets/map.sh --check
       - name: Set up a throwaway vault and the secrets output
         run: |
+          set -u
           # Dummy values for what --auto cannot generate. No "ci-" prefix: setup.sh
           # treats those as placeholders and never imports them.
           (umask 077 && printf '%s\n' \
@@ -82,6 +88,7 @@ jobs:
           DOMAIN=lab.example.test ACME_EMAIL=ci@example.test CF_DNS_API_TOKEN=ci-dummy-cloudflare-token ./secrets.sh compose --profile prod config -q
       - name: Verify production HTTPS requires ACME secrets
         run: |-
+          set -u
           # Without secrets.sh: every .env.example variable gets its documented
           # default (or "dummy"), except the two ACME ones the check must miss.
           awk '/^# \(default /{d=$3} /^[A-Za-z_][A-Za-z0-9_]*=$/{print $0 (d != "" ? d : "dummy"); d=""}' .env.example |

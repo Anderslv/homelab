@@ -136,3 +136,13 @@ case_guard_hook_regex() {
     expect_true "forbid-secret-files allows $path" eval "! hook_refuses $path"
   done
 }
+
+# Scripts that docs and CI run directly must be executable in git itself: the suite runs
+# them through "$BASH", so a lost mode bit would otherwise go unnoticed.
+case_guard_executables_are_executable() {
+  local path mode
+  for path in secrets.sh setup-dev.sh scripts/secrets/setup.sh scripts/secrets/map.sh; do
+    mode=$(git -C "$CHECKOUT" ls-files -s -- "$path" | cut -d ' ' -f 1)
+    expect_true "$path is 100755 in git (got ${mode:-untracked})" [ "$mode" = 100755 ]
+  done
+}
