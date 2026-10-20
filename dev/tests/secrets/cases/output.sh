@@ -10,7 +10,7 @@ output_run() {
   STATUS=0
   OUT=$(printf '%b' "$answers" | sandboxed ${OUTPUT_ENV:+"$OUTPUT_ENV"} "$BASH" -c 'set -euo pipefail
     d=$1; body=$2; shift 2
-    for lib in ui config map example output output-compose; do . "$d/$lib.sh"; done
+    for lib in ui config map example output age-key output-compose; do . "$d/$lib.sh"; done
     secrets_paths
     sops_ready() {
       local key

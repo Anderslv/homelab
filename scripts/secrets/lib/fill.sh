@@ -82,7 +82,7 @@ fill_import() {
   if [ "$n" = 1 ]; then value='Store this value?'; fi
   if fill_interactive && ! ask_yn "  $value" n; then note 'Nothing imported.'; return 1; fi
   PENDING_JSON=$(printf '%s\n%s\n' "$PENDING_JSON" "$found" | jq -cs '.[0] + .[1]')
-  ok "Took $n values from $FILL_ENV_FILE"
+  if [ "$n" = 1 ]; then ok "Took 1 value from $FILL_ENV_FILE"; else ok "Took $n values from $FILL_ENV_FILE"; fi
 }
 
 # VAR KIND SENSITIVITY: asks for the value; returns 1 to show the menu again.

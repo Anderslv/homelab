@@ -15,15 +15,22 @@ vault_age_key() {
 }
 
 # FILE [force]: attaches FILE as keys.txt; `force` (rotation only) replaces an existing one.
-vault_store_age_key() {
-  local entry="$VAULT_GROUP/age-key" err
+vault_store_age_key() { vault_put_age_key "$VAULT_GROUP/age-key" "$(cat "$1")" "${2:-}"; }
+
+# ENTRY KEY [force]: attaches KEY as ENTRY's keys.txt, adding ENTRY when it is missing.
+# KEY reaches keepassxc-cli through a pipe (<(…)), never a file; each try opens a new one.
+vault_put_age_key() {
+  local err
   vault_backup
-  err=$(kp attachment-import ${2:+-f} "$entry" keys.txt "$1" 2>&1 >/dev/null) && return 0
-  if kp_missing "$err" && kp add "$entry" >/dev/null; then
-    err=$(kp attachment-import "$entry" keys.txt "$1" 2>&1 >/dev/null) && return 0
+  err=$(kp attachment-import ${3:+-f} "$1" keys.txt <(printf '%s\n' "$2") 2>&1 >/dev/null) && return 0
+  if kp_missing "$err" && kp add "$1" >/dev/null; then
+    err=$(kp attachment-import "$1" keys.txt <(printf '%s\n' "$2") 2>&1 >/dev/null) && return 0
   fi
-  die "Could not store the age key in KeePassXC ($err). Stopping."
+  die "Could not store the age key in $1 ($err). Stopping."
 }
+
+# Prints the age key kept by a rotation that is not finished; returns 3 when there is none.
+vault_previous_age_key() { kp_read attachment-export --stdout "$VAULT_GROUP/age-key-previous" keys.txt; }
 
 # Prints the age key label; returns 3 when it is missing.
 vault_label() { kp_read show -s -a Password "$VAULT_GROUP/age-key-label"; }
