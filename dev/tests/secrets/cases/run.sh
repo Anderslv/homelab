@@ -227,6 +227,24 @@ case_paths_with_spaces() {
   expect_out 'OPENVPN_USER=test-user'
 }
 
+case_runs_from_other_cwd() {
+  new_case runs_from_other_cwd
+  run_sops_ready '{"TZ":"UTC"}'
+  mkdir "$CASE/links"
+  ln -s "$CHECKOUT/scripts/secrets/setup.sh" "$CASE/links/setup.sh"
+  ln -s "$CHECKOUT/scripts/secrets/map.sh" "$CASE/links/map.sh"
+  ln -s "$CHECKOUT/secrets.sh" "$CASE/links/secrets.sh"
+  STATUS=0
+  OUT=$(cd / && sandboxed "$BASH" "$CASE/links/setup.sh" --help 2>&1) || STATUS=$?
+  expect_status 0
+  STATUS=0
+  OUT=$(cd / && sandboxed "$BASH" "$CASE/links/map.sh" --help 2>&1) || STATUS=$?
+  expect_status 0
+  STATUS=0
+  OUT=$(cd / && sandboxed "$BASH" "$CASE/links/secrets.sh" run true 2>&1) || STATUS=$?
+  expect_status 0
+}
+
 case_upstream_adds_stack() {
   new_case upstream_adds_stack
   run_setup_ready "$FILL_ALL" --profile dev

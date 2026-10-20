@@ -31,12 +31,6 @@ repos:
       - id: shellcheck
   - repo: local
     hooks:
-      - id: secrets-inventory
-        name: Update secrets.inventory from the compose files
-        entry: ./update_secrets_inventory.sh
-        language: system
-        files: ^(docker-compose\.yml|services/.*\.yml)$
-        pass_filenames: false
       - id: env-example
         name: Check that .env.example matches the compose files
         entry: scripts/secrets/map.sh --check

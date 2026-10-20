@@ -5,7 +5,7 @@ This repo is a Docker Compose homelab. The main stack is `docker-compose.yml`, w
 ## Source of truth
 - Local bootstrap / required env behavior: `setup-dev.sh`
 - Example env values: `.env.example`
-- Secrets in a password manager: `setup_homelab.sh`, `secrets.sh`, `update_secrets_inventory.sh`, `secrets.inventory`, `lib/secrets-common.sh`, `lib/backends/*.sh`, `docs/secrets.md`
+- Secrets in a password manager: `scripts/secrets/setup.sh`, `scripts/secrets/map.sh`, `scripts/secrets/lib/*.sh`, `secrets.sh`, `docs/secrets.md`
 - Validation contract: `.github/workflows/test-docker-compose.yml`
 - Lint / formatting rules: `.pre-commit-config.yaml`
 - Operator overview: `README.md`
@@ -19,7 +19,7 @@ This repo is a Docker Compose homelab. The main stack is `docker-compose.yml`, w
 
 ## Do not edit or commit
 - `.env`
-- `.secrets.conf` and `*.kdbx`
+- `*.kdbx`
 - `services/.env-*`
 - `services/secrets/*`
 - `home-assistant/config/`
@@ -50,7 +50,7 @@ Treat these as likely to break routing or deployment:
 - Use lowercase, hyphenated YAML filenames
 - Use uppercase snake case for env vars
 - Prefer stack-local changes over repo-wide refactors
-- Mark new secret variables as required (`${VAR:?...}`) or give them a name matching `PASS|SECRET|TOKEN|KEY|PIN`, so `setup_homelab.sh` detects them, then run `./update_secrets_inventory.sh` and commit `secrets.inventory` (CI checks it)
+- Mark new secret variables as required (`${VAR:?...}`) or give them a name matching `PASS|SECRET|TOKEN|KEY|PIN`, then run `scripts/secrets/map.sh` and commit `.env.example` (CI checks it)
 - Compose profiles are feature flags: `dev`, `prod`, `infra`, `apps`, `service`, `tunnel`
 
 ## Traefik footgun

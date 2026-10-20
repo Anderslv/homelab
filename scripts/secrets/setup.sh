@@ -4,7 +4,13 @@
 # Read top to bottom it is the eight steps of spec §3; the logic lives in lib/.
 set -euo pipefail
 
-LIB_DIR=$(cd "$(dirname "$0")/lib" && pwd -P)
+# Follow a symlinked script (no readlink -f on macOS) to find lib/.
+SELF=${BASH_SOURCE[0]}
+while [ -L "$SELF" ]; do
+  LINK=$(readlink "$SELF")
+  case "$LINK" in /*) SELF=$LINK ;; *) SELF=$(dirname "$SELF")/$LINK ;; esac
+done
+LIB_DIR=$(cd "$(dirname "$SELF")/lib" && pwd -P)
 # shellcheck source-path=SCRIPTDIR source=lib/ui.sh
 . "$LIB_DIR/ui.sh"
 # shellcheck source-path=SCRIPTDIR source=lib/config.sh

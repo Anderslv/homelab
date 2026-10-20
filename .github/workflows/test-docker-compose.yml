@@ -18,12 +18,10 @@ jobs:
       - name: Validate setup and secrets script syntax
         run: |
           bash -n setup-dev.sh
-          bash -n setup_homelab.sh
           bash -n secrets.sh
-          bash -n update_secrets_inventory.sh
-      - name: Check that secrets.inventory matches the compose files
-        run: |
-          ./update_secrets_inventory.sh --check
+          bash -n scripts/secrets/setup.sh
+          bash -n scripts/secrets/map.sh
+          for f in scripts/secrets/lib/*.sh; do bash -n "$f"; done
       - name: Check that .env.example matches the compose files
         run: |
           scripts/secrets/map.sh --check
