@@ -37,3 +37,20 @@ repos:
         language: system
         files: ^(docker-compose(\.pods)?\.yml|services/.*\.yml|home-assistant/docker-compose\.yml|\.env\.example)$
         pass_filenames: false
+      - id: forbid-secret-files
+        name: Refusing to commit secret material
+        language: fail
+        entry: These files hold secrets; keep them out of git (see .gitignore)
+        files: ^secrets/|(^|/)(\.env(\..*)?|.*\.agekey|.*\.kdbx|.*\.sops\..*|\.sops\.yaml|age-key\.txt|keys\.txt)$
+        # The test fixture's copy is the same values-free variable list.
+        exclude: ^(dev/tests/secrets/fixture/)?\.env\.example$
+      - id: env-example-has-no-values
+        name: Check that .env.example holds names only, no values
+        language: system
+        entry: bash -c '! grep -nE "^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]#]" .env.example'
+        files: ^\.env\.example$
+        pass_filenames: false
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

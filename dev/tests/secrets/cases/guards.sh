@@ -94,3 +94,45 @@ case_config_refuses_symlink() {
   expect_true 'the symlink target is unchanged' \
     [ "$(cat "$CASE/elsewhere")" = untouched ]
 }
+
+# Paths that must never be committed, and the one .env file that must be.
+GUARD_SECRET_PATHS='.env .env.prev x.agekey keys.txt secrets/a'
+
+case_guard_gitignore_blocks() {
+  local path
+  new_case guard_gitignore_blocks
+  cp "$CHECKOUT/.gitignore" "$REPO/.gitignore"
+  # --no-index tests the patterns alone, whether or not a path is tracked.
+  for path in $GUARD_SECRET_PATHS; do
+    expect_true ".gitignore ignores $path" repo_git check-ignore -q --no-index "$path"
+  done
+  expect_true '.gitignore keeps .env.example' \
+    eval '! repo_git check-ignore -q --no-index .env.example'
+}
+
+# Prints the value of KEY (files or exclude) in the forbid-secret-files hook.
+hook_pattern() {
+  awk -v key="$1" '
+    /- id:/ { inhook = ($3 == "forbid-secret-files") }
+    inhook && $1 == key":" { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }
+  ' "$CHECKOUT/.pre-commit-config.yaml"
+}
+
+# PATH: true when the hook would refuse PATH (files matches, exclude does not).
+hook_refuses() {
+  printf '%s\n' "$1" | grep -E -- "$GUARD_FILES" | grep -vqE -- "$GUARD_EXCLUDE"
+}
+
+case_guard_hook_regex() {
+  local path
+  GUARD_FILES=$(hook_pattern files)
+  GUARD_EXCLUDE=$(hook_pattern exclude)
+  expect_true 'forbid-secret-files has a files pattern' [ -n "$GUARD_FILES" ]
+  expect_true 'forbid-secret-files has an exclude pattern' [ -n "$GUARD_EXCLUDE" ]
+  for path in $GUARD_SECRET_PATHS sub/.env sub/x.agekey vault.kdbx a.sops.yaml .sops.yaml age-key.txt; do
+    expect_true "forbid-secret-files refuses $path" hook_refuses "$path"
+  done
+  for path in .env.example README.md services/x.yml docs/keys.txt.md; do
+    expect_true "forbid-secret-files allows $path" eval "! hook_refuses $path"
+  done
+}

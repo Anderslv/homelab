@@ -18,3 +18,13 @@ config/homepage/kubernetes.yaml
 .codex
 /.desloppify/
 *.kdbx
+# Secret material: never commit it (also refused by the forbid-secret-files
+# pre-commit hook). .env.example is the variable list and holds no values.
+.env.*
+!.env.example
+*.agekey
+*.sops.*
+.sops.yaml
+age-key.txt
+keys.txt
+/secrets/
