@@ -54,6 +54,14 @@ last_guard_real_home_untouched() {
   expect_true 'nothing in the real HOME secrets folders changed during the run' [ -z "$changed" ]
 }
 
+case_guard_no_personal_defaults() {
+  local hits
+  # Ruling 12: committed defaults must not reveal the owner's location.
+  hits=$(cd "$CHECKOUT" && grep -rnE 'Copenhagen|DKK|da-DK' services home-assistant docker-compose*.yml .env.example docs || true)
+  expect_true 'no personal timezone or currency defaults in compose files, .env.example or docs' [ -z "$hits" ]
+  if [ -n "$hits" ]; then printf '%s\n' "$hits"; fi
+}
+
 case_ui_ok_has_no_colour_without_tty() {
   local dump escape=no
   new_case ui_ok_has_no_colour_without_tty

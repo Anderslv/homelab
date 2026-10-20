@@ -8,14 +8,14 @@ services:
       - NODE_ENV=production
       - DEBUG=false
       - PORT=3000
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
       - SITE_TITLE=${DUMBASSETS_SITE_TITLE:-DumbAssets}
       - BASE_URL=https://assets.${DOMAIN:-localhost.me}
       - DUMBASSETS_PIN=${DUMBASSETS_PIN:?Set DUMBASSETS_PIN in .env, direnv, or Dockhand}
       - SESSION_SECRET=${DUMBASSETS_SESSION_SECRET:?Generate a key using `openssl
         rand -base64 32 2>/dev/null`}
-      - CURRENCY_CODE=${DUMBASSETS_CURRENCY_CODE:-DKK}
-      - CURRENCY_LOCALE=${DUMBASSETS_CURRENCY_LOCALE:-da-DK}
+      - CURRENCY_CODE=${DUMBASSETS_CURRENCY_CODE:-USD}
+      - CURRENCY_LOCALE=${DUMBASSETS_CURRENCY_LOCALE:-en-US}
       - APPRISE_URL=${DUMBASSETS_APPRISE_URL:-}
     volumes: [dumbassets_data:/app/data]
     networks: [traefik_public]

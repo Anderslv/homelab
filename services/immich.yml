@@ -8,7 +8,7 @@ services:
       - POSTGRES_PASSWORD=${IMMICH_DB_PASSWORD:?Set IMMICH_DB_PASSWORD in .env, direnv,
         or Dockhand}
       - POSTGRES_DB=${IMMICH_DB_DATABASE_NAME:-immich}
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
     volumes: [immich_postgres_data:/var/lib/postgresql/data]
     healthcheck:
       test: [CMD-SHELL, pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"]
@@ -36,7 +36,7 @@ services:
         condition: service_healthy
     networks: [traefik_public, immich]
     environment:
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
       - IMMICH_API_KEY=${IMMICH_API_KEY:-}
       - IMMICH_URL=${IMMICH_URL:-http://immich-server:2283}
       - EXTERNAL_IMMICH_URL=${EXTERNAL_IMMICH_URL:-}

@@ -16,7 +16,7 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /run/dbus:/run/dbus:ro
     environment:
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
       - HA_CORS_ORIGIN=https://ha.${DOMAIN:-localhost.me}
     cap_add: [NET_ADMIN, NET_RAW]
     labels:

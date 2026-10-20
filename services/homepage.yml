@@ -6,7 +6,7 @@ services:
     container_name: home
     networks: [traefik_public]
     environment:
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
       - HOMEPAGE_ALLOWED_HOSTS=home.${DOMAIN:-localhost.me}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

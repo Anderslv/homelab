@@ -46,7 +46,7 @@ Start with a real `.env`.
 
 ```bash title="Create the root .env file"
 $ cat > .env <<'EOF'
-TZ=Europe/Copenhagen
+TZ=UTC
 DOMAIN=lab.example.com
 ACME_EMAIL=you@example.com
 CF_DNS_API_TOKEN=your_cloudflare_token

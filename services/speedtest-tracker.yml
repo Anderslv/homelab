@@ -9,7 +9,7 @@ services:
         32 2>/dev/null`}
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
       - APP_URL=https://speed.${DOMAIN:-localhost.me}
       - ASSET_URL=https://speed.${DOMAIN:-localhost.me}
       - DB_CONNECTION=sqlite
@@ -53,7 +53,7 @@ services:
       - DOMAIN=${DOMAIN:-localhost.me}
       - SPEEDTEST_API_TOKEN=${SPEEDTEST_API_TOKEN:-}
       - SPEEDTEST_TRIGGER_INTERVAL_SECONDS=${SPEEDTEST_TRIGGER_INTERVAL_SECONDS:-3600}
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
     command: [bash, /opt/speedtest-trigger/trigger.sh]
     volumes:
       - ../config/speedtest-tracker/trigger.sh:/opt/speedtest-trigger/trigger.sh:ro

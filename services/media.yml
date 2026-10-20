@@ -10,7 +10,7 @@ services:
         aliases: [torrent, sonarr, radarr, flaresolverr, byparr]
       traefik_public:
     environment:
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
       - VPN_SERVICE_PROVIDER=protonvpn
       - VPN_TYPE=openvpn
       - FREE_ONLY=${VPN_FREE_ONLY:-on}
@@ -50,7 +50,7 @@ services:
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik_public
@@ -70,7 +70,7 @@ services:
     image: ghcr.io/seerr-team/seerr:v3.2.0
     init: true
     networks: [traefik_public, media]
-    environment: ['TZ=${TZ:-Europe/Copenhagen}', LOG_LEVEL=info, PORT=5055]
+    environment: ['TZ=${TZ:-UTC}', LOG_LEVEL=info, PORT=5055]
     volumes: [seerr_config:/app/config]
     labels:
       - sablier.enable=true
@@ -112,7 +112,7 @@ services:
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
       - WEBUI_PORT=8080
       - TORRENTING_PORT=6881
     volumes: [qbittorrent_config:/config, media_data:/data]
@@ -133,7 +133,7 @@ services:
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
     volumes: [sonarr_config:/config, media_data:/data]
     restart: unless-stopped
     deploy:
@@ -158,7 +158,7 @@ services:
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
     volumes: [radarr_config:/config, media_data:/data]
     restart: unless-stopped
     deploy:
@@ -220,7 +220,7 @@ services:
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
-      - TZ=${TZ:-Europe/Copenhagen}
+      - TZ=${TZ:-UTC}
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik_public
