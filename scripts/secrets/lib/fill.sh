@@ -135,7 +135,8 @@ fill_one() {
   done
 }
 
-# MODE (ask|auto|env|skip): fills MISSING into PENDING_JSON and sets REFUSED.
+# MODE (ask|auto|env|env-auto|skip): fills MISSING into PENDING_JSON and sets REFUSED.
+# env-auto imports from FILL_ENV_FILE first, then generates what is still missing.
 fill_missing() {
   local mode=$1 var status
   REFUSED='' SKIPPED_OPTIONAL=''
@@ -148,7 +149,8 @@ fill_missing() {
     mode=$(menu 'a e g s') || exit 1
     case "$mode" in a) mode=auto ;; e) mode='env' ;; g) mode=guided ;; s) return 0 ;; esac
   fi
-  if [ "$mode" = env ]; then fill_import $MISSING || true; fi
+  case "$mode" in env|env-auto) fill_import $MISSING || true ;; esac
+  if [ "$mode" = env-auto ]; then mode=auto; fi
   for var in $MISSING; do
     if fill_pending "$var"; then continue; fi
     if [ "$mode" = auto ] && case "$FILL_OPTIONAL " in *" $var "*) true ;; *) false ;; esac; then

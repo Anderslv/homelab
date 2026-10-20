@@ -289,3 +289,50 @@ case_no_tmp_files_left() {
   expect_true 'the leftover tmp link target stayed empty' [ ! -s "$CASE/decoy" ]
   expect_true 'secrets.yaml is not a link' [ ! -L "$CASE/$SECRETS/secrets.yaml" ]
 }
+
+# Ruling 31: a non-interactive run adds new names to secrets.yaml and .env without asking.
+case_output_noninteractive_adds_new_key() {
+  local more='{"TZ":"UTC","ALPHA_DB_PASSWORD":"test-password-1","OPENVPN_USER":"vpn user # x","ALPHA_MODE":"fast"}'
+  new_case output_noninteractive_adds_new_key
+  output_run '' 'sops_ready; write_sops "$1"' "$WANT1"
+  output_run '' 'HOMELAB_NONINTERACTIVE=1; sops_ready; write_sops "$1"' "$more"
+  expect_status 0
+  expect_out 'ALPHA_MODE (added)'
+  expect_no_out 'never changes existing values'
+  expect_no_out 'Write secrets.yaml?'
+  expect_sops ALPHA_MODE fast
+  expect_sops ALPHA_DB_PASSWORD test-password-1
+  expect_mode "$CASE/$SECRETS/secrets.prev.yaml" 600
+  output_run '' 'write_env_file "$1"' "$WANT1"
+  output_run '' 'HOMELAB_NONINTERACTIVE=1; write_env_file "$1"' "$more"
+  expect_status 0
+  expect_out 'ALPHA_MODE (added)'
+  expect_no_out 'Write .env?'
+  expect_true '.env holds the added name' grep -q "^ALPHA_MODE='fast'\$" "$REPO/.env"
+}
+
+# Ruling 31: a change or a removal is still refused, even next to an added name.
+case_output_noninteractive_still_refuses_change() {
+  local changed='{"TZ":"UTC","ALPHA_DB_PASSWORD":"test-password-2","OPENVPN_USER":"vpn user # x","ALPHA_MODE":"fast"}'
+  local removed='{"TZ":"UTC","ALPHA_DB_PASSWORD":"test-password-1","ALPHA_MODE":"fast"}'
+  new_case output_noninteractive_still_refuses_change
+  output_run '' 'sops_ready; write_sops "$1"' "$WANT1"
+  cp "$CASE/$SECRETS/secrets.yaml" "$CASE/before.yaml"
+  for want in "$changed" "$removed"; do
+    output_run '' 'HOMELAB_NONINTERACTIVE=1; sops_ready; write_sops "$1"' "$want"
+    expect_status 1
+    expect_out 'ALPHA_MODE (added)'
+    expect_out 'A non-interactive run never changes existing values.'
+    expect_true 'secrets.yaml unchanged' cmp -s "$CASE/before.yaml" "$CASE/$SECRETS/secrets.yaml"
+  done
+  expect_missing "$CASE/$SECRETS/secrets.prev.yaml"
+  output_run '' 'write_env_file "$1"' "$WANT1"
+  cp "$REPO/.env" "$CASE/before.env"
+  for want in "$changed" "$removed"; do
+    output_run '' 'HOMELAB_NONINTERACTIVE=1; write_env_file "$1"' "$want"
+    expect_status 1
+    expect_out 'A non-interactive run never changes existing values.'
+    expect_true '.env unchanged' cmp -s "$CASE/before.env" "$REPO/.env"
+  done
+  expect_missing "$REPO/.env.tmp"
+}

@@ -522,3 +522,39 @@ case_setup_profile_partial_compose_renders() {
     "$CASE/$FILL_SECRETS/secrets.yaml" "$CASE/$FILL_SECRETS/compose.yml" "$REPO" 2>&1) || STATUS=$?
   expect_status 0
 }
+
+# Ruling 31: --env FILE with --auto imports first (placeholders ignored), then generates the rest.
+case_fill_env_and_auto_together() {
+  local env
+  new_case fill_env_and_auto_together
+  env="$CASE/import.env"
+  docker_shim rootless
+  fill_vault
+  printf '%s\n' TZ=UTC DOMAIN=example.com OPENVPN_USER=test-user OPENVPN_PASSWORD=test-password-2 \
+    DUMBASSETS_PIN=1234 > "$env"
+  setup_run 'test-pw\n' "$VAULT" --env-name dev --env "$env" --auto --profile dev
+  expect_status 0
+  expect_out 'Took 4 values from'
+  expect_out 'DUMBASSETS_PIN: ignoring a placeholder value'
+  expect_out 'DUMBASSETS_PIN set automatically'
+  expect_out 'ALPHA_DB_PASSWORD set automatically'
+  expect_out 'Setup finished.'
+  expect_no_out 'test-password-2'
+  expect_vault_json '.TZ' UTC
+  expect_vault_json '.OPENVPN_PASSWORD' test-password-2
+  expect_vault_json '.ALPHA_DB_PASSWORD | test("^[0-9a-f]{64}$")' true
+  expect_vault_json '.DUMBASSETS_PIN | test("^[0-9]{6}$") and . != "1234"' true
+  expect_sops OPENVPN_USER test-user
+  # The flags combine in either order; --skip-missing and --rotate still stand alone.
+  cp "$VAULT" "$CASE/vault.before"
+  setup_run 'test-pw\n' "$VAULT" --env-name dev --auto --env "$env" --profile dev
+  expect_status 0
+  expect_out 'secrets.yaml is up to date'
+  setup_run 'test-pw\n' "$VAULT" --env-name dev --env "$env" --auto --skip-missing --profile dev
+  expect_status 1
+  expect_out 'Use only one of --auto, --env and --skip-missing (--env and --auto may go together).'
+  setup_run 'test-pw\n' "$VAULT" --env-name dev --env "$env" --auto --profile dev --rotate TZ
+  expect_status 1
+  expect_out '--rotate takes --auto or --env FILE, not both.'
+  expect_vault_untouched
+}

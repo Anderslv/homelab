@@ -48,7 +48,8 @@ Usage: scripts/secrets/setup.sh [DATABASE] [option…]
   DATABASE                   the KeePassXC vault (.kdbx); remembered after the first run
   --profile NAME [STACK…]    set up this profile (or only these stacks) without asking
   --auto                     generate what can be generated, skip the rest
-  --env FILE                 import values from a .env file, skip the rest
+  --env FILE                 import values from a .env file, skip the rest; with --auto,
+                             import first, then generate what is still missing
   --skip-missing             add nothing; write the outputs from what KeePassXC holds
   --env-name NAME            the KeePassXC environment group homelab/NAME
   --output sops|env          an encrypted sops file (default) or a plain .env; remembered
@@ -57,7 +58,8 @@ Usage: scripts/secrets/setup.sh [DATABASE] [option…]
   --finish-age-key-rotation  remove the previous age key once every machine has the new one
   -h, --help                 show this help
 --auto, --env and --skip-missing ask nothing: they need --profile, and stdin
-carries only the vault password.
+carries only the vault password. They add new values to the outputs without asking,
+but never change or remove existing ones.
 USAGE
 }
 
@@ -66,9 +68,14 @@ DATABASE='' PROFILE='' STACKS='' MODE=ask ENV_NAME_ARG='' OUTPUT='' HOMELAB_NONI
 ROTATE='' FINISH=''
 # FLAG [VALUE…]: dies unless the flag has a value.
 need_value() { [ "$#" -ge 2 ] && [ -n "$2" ] || die "$1 needs a value (try --help)"; }
+# MODE: ask, auto, env, skip, or env-auto for --env with --auto (import, then generate).
 set_mode() {
-  [ "$MODE" = ask ] || die 'Use only one of --auto, --env and --skip-missing.'
-  MODE=$1 HOMELAB_NONINTERACTIVE=1
+  case "$MODE $1" in
+    'ask '*) MODE=$1 ;;
+    'auto env'|'env auto') MODE='env-auto' ;;
+    *) die 'Use only one of --auto, --env and --skip-missing (--env and --auto may go together).' ;;
+  esac
+  HOMELAB_NONINTERACTIVE=1
 }
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -90,6 +97,7 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 if [ -n "$ROTATE" ] && [ -n "$FINISH" ]; then die 'Use --rotate or --finish-age-key-rotation, not both.'; fi
+if [ -n "$ROTATE" ] && [ "$MODE" = env-auto ]; then die '--rotate takes --auto or --env FILE, not both.'; fi
 
 # The output step: sops (age key and label from KeePassXC, made on first use) or .env,
 # then the local compose.yml.

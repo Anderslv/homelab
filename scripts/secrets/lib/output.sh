@@ -40,21 +40,25 @@ changed_names() {
       elif $o[$k] != $n[$k] then "\($k) (changed)" else empty end'
 }
 
-# FILE OLD_JSON NEW_JSON: lists the changed names and asks; returns 1 for no, and
-# always in non-interactive runs. Changes to the names in OUTPUT_EXPECTED (what --rotate
-# asked for) are listed, but alone they need no answer.
+# FILE OLD_JSON NEW_JSON: lists the changed names and asks; returns 1 for no. Changes to
+# the names in OUTPUT_EXPECTED (what --rotate asked for) are listed, but alone they need no
+# answer. Non-interactive runs write added names without asking and refuse any other change.
 output_confirm() {
-  local name unexpected=''
+  local name unexpected='' existing=''
   printf '  %s will change:\n' "$1" >&2
   while IFS= read -r name; do
     if [ -z "$name" ]; then continue; fi
     case " $OUTPUT_EXPECTED " in
       *" ${name% (*} "*) note "$name, as --rotate asked" ;;
-      *) note "$name"; unexpected=1 ;;
+      *) note "$name"; unexpected=1
+        case "$name" in *' (added)') ;; *) existing=1 ;; esac ;;
     esac
   done < <(changed_names "$2" "$3")
   if [ -z "$unexpected" ]; then return 0; fi
-  if [ "${HOMELAB_NONINTERACTIVE:-}" = 1 ]; then fail 'A non-interactive run never changes existing values.'; return 1; fi
+  if [ "${HOMELAB_NONINTERACTIVE:-}" = 1 ]; then
+    if [ -z "$existing" ]; then return 0; fi
+    fail 'A non-interactive run never changes existing values.'; return 1
+  fi
   ask_yn "  Write $1?" y
 }
 
