@@ -60,21 +60,17 @@ $ docker compose --profile dev config
 required variable ... is missing a value
 ```
 
-Run the bootstrap script first:
+Plain `docker compose` sees no values: they live in KeePassXC. Run `scripts/secrets/setup.sh --profile dev`. It lists every missing variable with `✗`, generates the app secrets, and asks for the rest (`OPENVPN_USER`, `OPENVPN_PASSWORD`, your timezone and domain). See [Secrets](secrets.md).
 
-```bash title="Prepare local env"
-$ ./setup-dev.sh
+Then render through `secrets.sh`, which also leaves out the stacks you have not set up:
+
+```bash title="Render through secrets.sh"
+$ ./secrets.sh compose --profile dev config --quiet
+$ echo $?
+0
 ```
 
-It generates app keys and writes dummy `OPENVPN_USER`, `OPENVPN_PASSWORD`, and `DUMBASSETS_PIN` values so the full stack can render. Those OpenVPN values are only placeholders; replace them before running Gluetun-backed media automation. `DUMBASSETS_SESSION_SECRET` is generated like the other app keys.
-
-The current repo still expects this local value for Paperless:
-
-- `PAPERLESS_ADMIN_PASSWORD`
-
-In CI, `setup-dev.sh` fills `PAPERLESS_ADMIN_PASSWORD`. Locally, set `PAPERLESS_ADMIN_PASSWORD` in `.env`, direnv, or Dockhand unless you already export it.
-
-For production ACME renders, use `docker compose --profile prod config` and set `DOMAIN`, `ACME_EMAIL`, and `CF_DNS_API_TOKEN`.
+For production ACME renders, run `scripts/secrets/setup.sh --profile prod`, which asks for `DOMAIN`, `ACME_EMAIL`, and `CF_DNS_API_TOKEN`, then `./secrets.sh compose --profile prod config --quiet`.
 
 If you only want the control plane, use `docker-compose.pods.yml` instead of fighting the full stack.
 
@@ -153,8 +149,23 @@ Fix one of these ways:
 - keep `ADGUARD_DNS_PORT=1053`
 - or stop the host resolver that already owns port `53`
 
-```bash title="Keep the non-conflicting dev port"
-$ printf '%s\n' 'ADGUARD_DNS_PORT=1053' >> .env
+```bash title="Change the stored port back to 1053"
+$ scripts/secrets/setup.sh --profile infra --rotate ADGUARD_DNS_PORT
+…
+Rotating ADGUARD_DNS_PORT (default · setting): Host port used for AdGuard DNS. Keep 1053 in development to avoid conflicts with system DNS on port 53. Set to 53 on dedicated hosts.
+  − Current value: 53
+  − KeePassXC keeps the old value in the history of the vars entry.
+  [e] from a .env file  [m] enter now  [c] cancel
+  Choose [e m c]: m
+  ADGUARD_DNS_PORT [1053]: 1053
+  Use 1053 for ADGUARD_DNS_PORT? [Y/n]
+  ✓ ADGUARD_DNS_PORT set
+…
+  secrets.yaml will change:
+  − ADGUARD_DNS_PORT (changed), as --rotate asked
+  ✓ Wrote secrets.yaml and verified it decrypts
+…
+  ✓ Setup finished.
 ```
 
 ---

@@ -35,7 +35,7 @@ Open `http://localhost:3000`.
 
 If you want the full routed stack, keep going.
 
-On macOS, set up Colima and Bash 5 first: see [docs/macos.md](docs/macos.md).
+On macOS, set up Colima first: see [docs/macos.md](docs/macos.md).
 
 ---
 
@@ -56,19 +56,33 @@ $ ./setup-dev.sh
 [INFO] Next: store your values with scripts/secrets/setup.sh, then run ./secrets.sh compose --profile dev up --wait
 ```
 
-Fill the values you actually need, then start the full stack or the profiles you want.
-
-!!! tip
-    To keep real secrets out of `.env`, store them in KeePassXC with `scripts/secrets/setup.sh`, then start the stack with `./secrets.sh compose --profile dev up --wait`. See [Secrets](docs/secrets.md).
+Every value the stack needs (passwords, your domain, your timezone) lives in **KeePassXC**, never in the repo. `scripts/secrets/setup.sh` asks for what is missing, generates what it can, and writes an encrypted file outside the repo. `./secrets.sh` then runs `docker compose` with those values. See [Secrets](docs/secrets.md).
 
 ```bash title="Start the full stack"
-# 2. Add the required values to .env
-$ cat >> .env <<'EOF'
-PAPERLESS_ADMIN_PASSWORD=change-me
-EOF
+# 2. Store the values in KeePassXC (creates the vault on first use)
+$ scripts/secrets/setup.sh ~/homelab.kdbx --profile dev
+…
+30 variables missing. How do you want to set them?
+  [a] automatically where possible, asking for the rest
+  [e] from a .env file, asking for the rest
+  [g] guided, choosing for each variable
+  [s] skip all for now
+  Choose [a e g s]: a
+…
+  ✓ RUSTFS_ACCESS_KEY set automatically
+  ✓ RUSTFS_SECRET_KEY set automatically
+…
+  ✓ 17 values stored and verified
+  Label for the age key [primary]:
+  ✓ Installed the age key in ~/.config/sops/age/keys.txt
+  ✓ Wrote secrets.yaml and verified it decrypts
+  ✓ Wrote ~/.config/homelab-secrets/compose.yml
+  − Still missing: OPENVPN_PASSWORD OPENVPN_USER. Run setup.sh again to set them.
+…
+  ✓ Setup finished.
 
 # 3. Start the full local stack and wait for health checks
-$ docker compose --profile dev up --wait
+$ ./secrets.sh compose --profile dev up --wait
 [+] Running ...
  ✔ Container homelab-traefik-1   Started
  ✔ Container homelab-sablier-1   Started
@@ -232,15 +246,10 @@ Run `setup-dev.sh` to create the mkcert-backed files for
 `https://*.localhost.me`, then start the stack with:
 
 ```bash
-docker compose --profile dev up --wait
+./secrets.sh compose --profile dev up --wait
 ```
 
-For production ACME certificates, start the stack with the production profile:
-
-- `docker compose --profile prod up -d`
-- `DOMAIN`
-- `ACME_EMAIL`
-- `CF_DNS_API_TOKEN`
+For production ACME certificates, run `scripts/secrets/setup.sh --profile prod`, which asks for `DOMAIN`, `ACME_EMAIL` and `CF_DNS_API_TOKEN`, then start the stack with `./secrets.sh compose --profile prod up -d`.
 
 ### 2. The media stack still depends on Gluetun
 
@@ -254,7 +263,7 @@ For production ACME certificates, start the stack with the production profile:
 
 `prowlarr` and `bazarr` route directly on `traefik_public`.
 
-The active compose config requires `OPENVPN_USER` and `OPENVPN_PASSWORD` for Gluetun. Store real VPN credentials with `scripts/secrets/setup.sh` before running the VPN-backed media automation.
+The active compose config requires `OPENVPN_USER` and `OPENVPN_PASSWORD` for Gluetun. Store real VPN credentials with `scripts/secrets/setup.sh` before running the VPN-backed media automation. Until both are stored, setup keeps the media stack commented out in your local `compose.yml`, so the rest of the stack still starts.
 
 ### 3. There are parked service definitions
 
@@ -268,6 +277,7 @@ These files exist but are **not** included from `docker-compose.yml`:
 ## Read The Right Doc
 
 - [Docs index](docs/index.md)
+- [Variables and secrets](docs/secrets.md)
 - [Architecture](docs/architecture.md)
 - [Service reference](docs/services.md)
 - [Customization](docs/customization.md)

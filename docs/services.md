@@ -202,16 +202,16 @@ Optional vars:
 - `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` overrides the **Hermes** dashboard username and defaults to `admin`.
 - Slack bot credentials belong in the Hermes `ops` profile `.env`, not the repo root `.env`: `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `SLACK_ALLOWED_USERS`, and `SLACK_ALLOWED_CHANNELS`.
 
-Bootstrap behavior:
+Where the values come from:
 
-- `.env.example` already provides local RustFS defaults.
-- `setup-dev.sh` auto-generates `IMMICH_DB_PASSWORD`, `LISTMONK_db__password`, `PAPERLESS_DBPASS`, `PAPERLESS_SECRET_KEY`, `NEXTAUTH_SECRET`, `MEILI_MASTER_KEY`, `SPEEDTEST_APP_KEY`, `DUMBASSETS_SESSION_SECRET`, `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD`, and `HERMES_DASHBOARD_BASIC_AUTH_SECRET` when they are missing.
-- `setup-dev.sh` writes dummy `OPENVPN_USER`, `OPENVPN_PASSWORD`, and `DUMBASSETS_PIN` values for local config rendering. Real Gluetun use still needs real VPN credentials.
-- `GLUETUN_HEALTHCHECK_DISABLED=true` is the local default so `docker compose --profile dev up --wait` can start the media UI routes with dummy VPN credentials. Set it to `false` when real VPN credentials should gate the stack.
-- `setup-dev.sh` creates mkcert-backed local TLS files for `https://*.localhost.me` and writes Traefik's generated certificate dynamic config.
-- In CI only, `setup-dev.sh` also writes a dummy `PAPERLESS_ADMIN_PASSWORD` value so local config rendering works without real secrets.
-- For local full-stack runs, set `PAPERLESS_ADMIN_PASSWORD` yourself unless you already provide it through the environment.
-- For production ACME certificates, use `docker compose --profile prod up -d` and set `DOMAIN`, `ACME_EMAIL`, and `CF_DNS_API_TOKEN`.
+- `.env.example` lists every variable with its kind and the services that use it. It never holds a value.
+- `scripts/secrets/setup.sh` stores the values in KeePassXC. Its `[a]` choice (or `--auto`) generates every variable in the table above except `OPENVPN_USER` and `OPENVPN_PASSWORD`, which you type: `RUSTFS_ACCESS_KEY` and `RUSTFS_SECRET_KEY` as 20 and 40 letters and digits, `SPEEDTEST_APP_KEY` as 32 base64 bytes, `DUMBASSETS_PIN` as 6 digits, the rest as 64 hex characters.
+- `OPENVPN_USER` and `OPENVPN_PASSWORD` are required, so the media stack stays commented out in your local `compose.yml` until both have a value. In development, type any placeholder for both. With the `dev` profile, setup also stores `GLUETUN_HEALTHCHECK_DISABLED=true`, so `./secrets.sh compose --profile dev up --wait` then starts the media UI routes without a working VPN. Store real credentials and set it to `false` with `scripts/secrets/setup.sh --rotate GLUETUN_HEALTHCHECK_DISABLED` before using the download automation.
+- A stack whose required values are missing stays commented out in your local `compose.yml`, so the rest of the stack still starts.
+- `setup-dev.sh` creates mkcert-backed local TLS files for `https://*.localhost.me` and writes Traefik's generated certificate dynamic config. It never touches `.env`.
+- For production ACME certificates, run `scripts/secrets/setup.sh --profile prod`, which asks for `DOMAIN`, `ACME_EMAIL` and `CF_DNS_API_TOKEN`, then `./secrets.sh compose --profile prod up -d`.
+
+See [Secrets](secrets.md).
 
 ---
 

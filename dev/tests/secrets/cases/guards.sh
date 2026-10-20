@@ -146,3 +146,28 @@ case_guard_executables_are_executable() {
     expect_true "$path is 100755 in git (got ${mode:-untracked})" [ "$mode" = 100755 ]
   done
 }
+
+# Every scripts/secrets/… and ./secrets.sh command that docs/secrets.md quotes names a file
+# that exists, and every --flag on a setup.sh or map.sh line is one that script's --help lists.
+case_docs_commands_exist() {
+  local doc="$CHECKOUT/docs/secrets.md" paths path script help flag flags count=0
+  new_case docs_commands_exist
+  paths=$(grep -oE '(scripts/secrets/[A-Za-z0-9_./-]*[A-Za-z0-9_]|\./secrets\.sh)' "$doc" | LC_ALL=C sort -u)
+  expect_true 'docs/secrets.md quotes scripts/secrets/setup.sh' eval 'printf "%s\n" "$paths" | grep -qx scripts/secrets/setup.sh'
+  for path in $paths; do
+    expect_true "docs/secrets.md: $path exists" [ -e "$CHECKOUT/${path#./}" ]
+  done
+  for script in setup map; do
+    help=$(sandboxed "$BASH" "$CHECKOUT/scripts/secrets/$script.sh" --help 2>&1)
+    # The text after each "$script.sh" up to the next backtick is that command's arguments.
+    flags=$(awk -v name="$script.sh" '{ line = $0
+        while ((i = index(line, name)) > 0) { line = substr(line, i + length(name)); arg = line
+          sub(/`.*/, "", arg); print arg } }' "$doc" | grep -oE -- '(^| )--[a-z][a-z-]*' | tr -d ' ' | LC_ALL=C sort -u)
+    for flag in $flags; do
+      count=$((count + 1))
+      case "$help" in *"$flag"*) record pass "docs/secrets.md: $script.sh $flag is in --help" ;;
+        *) record fail "docs/secrets.md: $script.sh $flag is in --help" ;; esac
+    done
+  done
+  expect_true 'docs/secrets.md quotes setup.sh flags' [ "$count" -gt 0 ]
+}

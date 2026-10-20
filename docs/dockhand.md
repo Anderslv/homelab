@@ -36,27 +36,19 @@ During bootstrap, `https://docker.${DOMAIN}` does not exist yet because the main
 
 ## Step 1: Prepare The Stack Variables
 
-Local development and the main Dockhand stack use the HTTPS defaults from `.env.example` (mkcert-backed on `localhost.me`) through `docker-compose.yml` and `--profile dev`. For production ACME HTTPS, deploy the same compose file with `--profile prod` so **Traefik** uses Cloudflare DNS-01. Set the production values:
+Local development and the main Dockhand stack use the compose defaults (mkcert-backed HTTPS on `localhost.me`) through `docker-compose.yml` and `--profile dev`. For production ACME HTTPS, deploy the same compose file with `--profile prod` so **Traefik** uses Cloudflare DNS-01. Set the production values:
 
 - `DOMAIN`
 - `ACME_EMAIL`
 - `CF_DNS_API_TOKEN`
 
-Start with a real `.env`.
+Dockhand deploys from Git and reads variables from its own settings, not from KeePassXC. `scripts/secrets/setup.sh` does not manage Dockhand deployments. Keep the values in KeePassXC anyway, so there is one source of truth, and paste them into Dockhand:
 
-```bash title="Create the root .env file"
-$ cat > .env <<'EOF'
-TZ=UTC
-DOMAIN=lab.example.com
-ACME_EMAIL=you@example.com
-CF_DNS_API_TOKEN=your_cloudflare_token
-DOCKHAND_DATA_DIR=/opt/dockhand
-RUSTFS_ACCESS_KEY=rustadmin
-RUSTFS_SECRET_KEY=rustadmin
-EOF
-```
+1. Run `scripts/secrets/setup.sh --profile prod` once on any machine. It generates the secrets and asks for the rest.
+2. In the KeePassXC app, open `homelab/prod/vars`. Its Password field holds every value as one JSON object.
+3. Copy each value into the Dockhand stack's variables. Set `DOCKHAND_DATA_DIR` there too, for example `/opt/dockhand`.
 
-Then add the app secrets required by the services you plan to run.
+These are the app secrets for the services you plan to run.
 
 ```text title="Common app variables"
 IMMICH_DB_PASSWORD=...
@@ -71,7 +63,7 @@ DUMBASSETS_PIN=...
 DUMBASSETS_SESSION_SECRET=...
 ```
 
-`setup-dev.sh` writes a dummy local `DUMBASSETS_PIN` and auto-generates `DUMBASSETS_SESSION_SECRET`. Production should set both explicitly.
+Setup generates `DUMBASSETS_PIN` (6 digits) and `DUMBASSETS_SESSION_SECRET` like the other app secrets.
 
 Optional values for current features:
 
@@ -103,7 +95,7 @@ OPENVPN_USER=...
 OPENVPN_PASSWORD=...
 ```
 
-`setup-dev.sh` writes dummy local values for config rendering, but real Gluetun use still needs real ProtonVPN OpenVPN credentials for `torrent`, `sonarr`, and `radarr`.
+Setup never generates these. Gluetun needs real ProtonVPN OpenVPN credentials for `torrent`, `sonarr`, and `radarr`.
 
 ---
 
@@ -133,7 +125,7 @@ Recommended settings:
 | **Compose path** | `docker-compose.yml` |
 | **Compose profile** | `dev` for local/main-stack defaults; `prod` for production ACME |
 
-Pass the same variables from the previous step into the Dockhand-managed stack.
+Paste the values from KeePassXC (previous step) into the Dockhand-managed stack.
 
 This repo uses `${VAR:?message}` guards heavily. If a required variable is missing, Compose render fails before deployment completes.
 

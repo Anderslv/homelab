@@ -4,13 +4,16 @@ Use this page to run the stack on a Mac with **Colima** instead of a Linux host.
 
 **Colima** runs the Docker daemon inside a small Linux VM (built on **Lima**). The `docker` and `docker compose` commands on your Mac talk to that VM. Most of the stack runs unchanged, but every "host" path, port, and network in the compose files now means the VM, not your Mac. This page covers where that matters.
 
-Colima and Lima are MIT-licensed and send no telemetry.
+**Colima** is MIT-licensed and **Lima** is Apache-2.0; neither sends telemetry. **Homebrew** (BSD-2-Clause) sends analytics by default, so the first step turns them off.
 
 ---
 
 ## Try It Now
 
 ```bash title="Install the tools"
+# 0. Stop Homebrew's analytics
+$ brew analytics off
+
 # 1. Colima, the Docker CLI, and the Compose plugin
 $ brew install colima docker docker-compose
 
@@ -20,9 +23,12 @@ $ cat ~/.docker/config.json 2>/dev/null || echo '{}' > ~/.docker/config.json
 # Add this key to ~/.docker/config.json:
 #   "cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]
 
-# 3. Bash 5 and mkcert (skip if you use the Nix dev shell; see below)
-$ brew install bash mkcert
+# 3. mkcert, and the tools that keep your values in KeePassXC (see Secrets)
+$ brew install mkcert sops age jq
+$ brew install --cask keepassxc
 ```
+
+The **Nix dev shell** (`nix develop`, or `direnv allow` with the included `.envrc`) provides `mkcert`, `sops`, `age`, `jq` and `keepassxc-cli` as well.
 
 ```bash title="Start the VM"
 # 6 CPUs, 16 GiB RAM, 100 GiB disk, Rosetta for amd64-only images
@@ -36,8 +42,11 @@ colima
 $ mkcert -install
 $ ./setup-dev.sh
 
+# Store the values in KeePassXC; see Secrets
+$ scripts/secrets/setup.sh ~/homelab.kdbx --profile dev
+
 # Home Assistant and NetAlertX are skipped; see "Skip The Host-Networked Services"
-$ docker compose --profile dev up --wait --scale ha=0 --scale netalertx=0
+$ ./secrets.sh compose --profile dev up --wait --scale ha=0 --scale netalertx=0
 
 $ curl https://whoami.localhost.me
 Hostname: homelab-whoami-1
@@ -47,25 +56,22 @@ Hostname: homelab-whoami-1
 
 ---
 
-## Use Bash 5, Not The macOS Default
+## Keep Your Values Out Of The Repo
 
-macOS ships **Bash 3.2**. `setup-dev.sh`, `setup_homelab.sh`, and `update_secrets_inventory.sh` use Bash 4+ features (`${var,,}` and `mapfile`) and fail under 3.2:
+`scripts/secrets/setup.sh` and `./secrets.sh` run on the **Bash 3.2** and BSD tools that ship with macOS; you need neither Homebrew Bash nor Nix. Setup stores every value in KeePassXC and writes an encrypted file under `~/.config/homelab-secrets`, outside the repo.
 
-```bash title="Failure under the macOS system bash"
-$ ./setup-dev.sh
-./setup-dev.sh: line 166: ${ci_value,,}: bad substitution
+Setup also checks how Docker runs. Under Colima the daemon runs as root inside the VM, isolated from macOS:
+
+```bash title="The Docker check under Colima"
+$ scripts/secrets/setup.sh --profile infra --skip-missing
+  ! Docker runs as root. A container escape or anyone in the docker group gets root on this machine.
+    Rootless Docker: https://docs.docker.com/engine/security/rootless/
+    (inside the Colima VM, so it is isolated from macOS)
+  ✓ .env.example is up to date
+…
 ```
 
-The scripts start with `#!/usr/bin/env bash`, so they use the first `bash` on your `PATH`. Either of these puts Bash 5 first:
-
-- the repo's **Nix dev shell** (`nix develop`, or `direnv allow` with the included `.envrc`), which also provides `mkcert`
-- `brew install bash`, since `/opt/homebrew/bin` comes before `/bin` on a default Homebrew `PATH`
-
-```bash title="Check which bash the scripts get"
-# Any 5.x version works
-$ bash --version | head -1
-GNU bash, version 5.2.37(1)-release (aarch64-apple-darwin24.0.0)
-```
+Docker inside the VM keeps each container's environment in `/var/lib/docker`, readable by root in the VM. See [Secrets](secrets.md) for the full guide and threat model.
 
 ---
 
@@ -77,7 +83,7 @@ GNU bash, version 5.2.37(1)-release (aarch64-apple-darwin24.0.0)
 | `../config/...` bind mounts | Colima shares your home folder with the VM. Keep the repo under `~`. |
 | Published ports (`80`, `443`, `1053`, `3000`) | Forwarded to `localhost` on your Mac. |
 | `network_mode: host` (Home Assistant, NetAlertX) | The VM's network, which sits behind NAT. No LAN discovery. |
-| `/etc/localtime`, `/etc/timezone`, `/run/dbus` mounts | The VM's files, not your Mac's. `TZ` in `.env` still sets the container timezone. |
+| `/etc/localtime`, `/etc/timezone`, `/run/dbus` mounts | The VM's files, not your Mac's. The `TZ` you stored with setup still sets the container timezone. |
 | `/dev/net/tun` (Gluetun) | Provided by the VM kernel. Works unchanged. |
 
 ---
@@ -92,13 +98,13 @@ GNU bash, version 5.2.37(1)-release (aarch64-apple-darwin24.0.0)
 Both are in the `dev` profile, so exclude them when you start the stack:
 
 ```bash title="Start the dev profile without them"
-$ docker compose --profile dev up --wait --scale ha=0 --scale netalertx=0
+$ ./secrets.sh compose --profile dev up --wait --scale ha=0 --scale netalertx=0
 ```
 
 If you run them anyway, Traefik reaches them through `host.docker.internal` (see `config/traefik/dyn/ha.yml`). Check that this name leads to the VM, where they listen:
 
 ```bash title="Check Traefik-to-Home Assistant reachability"
-$ docker compose exec traefik-dev wget -O- http://host.docker.internal:8123/manifest.json
+$ ./secrets.sh compose exec traefik-dev wget -O- http://host.docker.internal:8123/manifest.json
 ```
 
 If that fails, the route returns a 502 or hangs. See [Home Assistant Hangs Or Shows "Retrying"](troubleshooting.md#home-assistant-hangs-or-shows-retrying).
@@ -177,5 +183,5 @@ Hostname: homelab-whoami-1
 Traefik reloads routes when it sees file-change events. Edits made on the Mac do not always produce those events inside the VM. Restart Traefik to load the new routes:
 
 ```bash title="Reload the file-provider routes"
-$ docker compose restart traefik-dev
+$ ./secrets.sh compose restart traefik-dev
 ```

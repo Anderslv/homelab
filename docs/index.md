@@ -42,8 +42,9 @@ Then use one of these paths:
 - want the Git-managed deployment path? Read [Deployment](dockhand.md)
 - want to add your own app? Read [Configuration](customization.md)
 - running on a Mac? Read [macOS With Colima](macos.md)
+- want to store passwords and settings? Read [Secrets](secrets.md)
 
-This starts only the Dockhand bootstrap stack. Before rendering or running the main stack, run `./setup-dev.sh` so local generated keys and validation placeholders exist.
+This starts only the Dockhand bootstrap stack. Before rendering or running the main stack, run `./setup-dev.sh` for the local certificate and `scripts/secrets/setup.sh` for the values, then start it with `./secrets.sh compose`.
 
 ---
 
@@ -74,6 +75,14 @@ This starts only the Dockhand bootstrap stack. Before rendering or running the m
     Add a new service using the same Traefik, Sablier, and Homepage patterns as the active stack.
 
     [→ Read configuration](customization.md)
+
+-   🔐 **Secrets**
+
+    ---
+
+    Keep every value in **KeePassXC**, write an encrypted local file, run the stack with `./secrets.sh`.
+
+    [→ Read secrets](secrets.md)
 
 -   🐳 **Deployment**
 
