@@ -38,6 +38,31 @@ $ docker context show
 colima
 ```
 
+```bash title="Check the Mac is ready"
+$ ./check_macos.sh
+```
+
+`check_macos.sh` changes nothing. It prints `✓` for each check that passes, `!` for a warning and `✗` for a problem, each with a one-line fix, and exits 1 only when it finds a problem. It checks the tools, the Colima context, the VM size (at least 4 CPUs and 16 GiB), rootful Docker, whether the images publish `linux/arm64`, and, once the stack runs, whether `https://whoami.localhost.me` answers. Pass `--ci` to skip the VM size and image checks.
+
+The sample below comes from a run against stand-in `docker`, `colima` and `curl` commands in a Linux sandbox, not from a real Mac. On a Mac with Colima, the report looks like this:
+
+```text title="Sample report (shimmed run)"
+  ✓ docker and docker compose found
+  ✓ sops found
+  ✓ age found
+  ✓ keepassxc-cli found
+  ✓ docker context is colima
+  ✓ Colima has 6 CPUs and 16 GiB
+  ! Docker runs as root. A container escape or anyone in the docker group gets root on this machine.
+    Rootless Docker: https://docs.docker.com/engine/security/rootless/
+    (inside the Colima VM, so it is isolated from macOS)
+  ! Could not list the images (secrets not set up yet?)
+    Fix: scripts/secrets/setup.sh ~/homelab.kdbx --profile dev, then run this again
+  ✓ https://whoami.localhost.me answers
+```
+
+The image warning goes away once you have run `scripts/secrets/setup.sh` (below).
+
 ```bash title="Prepare and start the stack"
 $ mkcert -install
 $ ./setup-dev.sh

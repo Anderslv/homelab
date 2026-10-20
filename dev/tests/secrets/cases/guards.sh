@@ -141,7 +141,7 @@ case_guard_hook_regex() {
 # them through "$BASH", so a lost mode bit would otherwise go unnoticed.
 case_guard_executables_are_executable() {
   local path mode
-  for path in secrets.sh setup-dev.sh scripts/secrets/setup.sh scripts/secrets/map.sh; do
+  for path in secrets.sh setup-dev.sh check_macos.sh scripts/secrets/setup.sh scripts/secrets/map.sh; do
     mode=$(git -C "$CHECKOUT" ls-files -s -- "$path" | cut -d ' ' -f 1)
     expect_true "$path is 100755 in git (got ${mode:-untracked})" [ "$mode" = 100755 ]
   done
